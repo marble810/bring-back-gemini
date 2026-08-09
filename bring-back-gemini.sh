@@ -123,6 +123,9 @@ def recurse(value):
 new = copy.deepcopy(data)
 recurse(new)
 new["variations_country"] = "us"
+# Chromium 官方为测试/开发预留的 permanent country override，优先级高于
+# variations_permanent_consistency_country（见 variations_field_trial_creator_base）。
+new["variations_permanent_overridden_country"] = "us"
 last_path = os.path.join(os.path.dirname(path), "Last Version")
 if isinstance(new.get("variations_permanent_consistency_country"), list) and len(new["variations_permanent_consistency_country"]) >= 2 and os.path.isfile(last_path):
     with open(last_path, "r", encoding="utf-8") as f:
@@ -130,17 +133,27 @@ if isinstance(new.get("variations_permanent_consistency_country"), list) and len
     if version:
         new["variations_permanent_consistency_country"][0] = version
         new["variations_permanent_consistency_country"][1] = "us"
+# 始终规范化 browser.enabled_labs_experiments：启用 glic@1（chrome://flags/#glic
+# → Enabled 的持久化等价物），移除任意 glic/glic@N 旧值并保留其他 flag；
+# --disable-ai-download 时额外把两个本地 AI 模型 flag 规范化为 @2。
+browser = new.setdefault("browser", {})
+flags = browser.get("enabled_labs_experiments")
+if flags is None:
+    flags = []
+elif not isinstance(flags, list):
+    raise ValueError("browser.enabled_labs_experiments 必须是数组")
+names = ("optimization-guide-on-device-model", "prompt-api-for-gemini-nano")
+kept = []
+for x in flags:
+    if isinstance(x, str) and (x == "glic" or x.startswith("glic@")):
+        continue
+    if disable and isinstance(x, str) and any(x == n or x.startswith(n + "@") for n in names):
+        continue
+    kept.append(x)
+kept.append("glic@1")
 if disable:
-    browser = new.setdefault("browser", {})
-    flags = browser.get("enabled_labs_experiments")
-    if flags is None:
-        flags = []
-    elif not isinstance(flags, list):
-        raise ValueError("browser.enabled_labs_experiments 必须是数组")
-    names = ("optimization-guide-on-device-model", "prompt-api-for-gemini-nano")
-    kept = [x for x in flags if not (isinstance(x, str) and any(x == n or x.startswith(n + "@") for n in names))]
     kept.extend(n + "@2" for n in names)
-    browser["enabled_labs_experiments"] = kept
+browser["enabled_labs_experiments"] = kept
 changed = new != data
 print("CHANGED=" + ("1" if changed else "0"))
 if mode == "write" and changed:

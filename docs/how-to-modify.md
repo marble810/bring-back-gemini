@@ -15,6 +15,7 @@
 11. Linux 策略路径覆盖必须同时受测试模式变量保护；测试只能指向临时目录。
 12. 修改任一主脚本后必须重新生成 `checksums.sha256`、提交主脚本与清单，再把两个启动器内置的 `BBG_PAYLOAD_COMMIT` 默认值更新到该提交；启动器必须从同一不可变提交下载清单和主脚本。
 13. `run.sh` / `run.ps1` 的默认仓库、发布提交、菜单和参数透传应保持一致；远程下载测试只能使用本地 HTTP fixture。
+14. `variations_permanent_overridden_country` 必须始终写入 `us`；`browser.enabled_labs_experiments` 必须始终规范化为包含 `glic@1`（移除 `glic`/`glic@N` 变体），`-DisableAIDownload` 时再追加两个 Nano `@2` flag。这两个都是 Chrome 已知配置，缺失时允许创建，但 flag 列表类型异常必须拒绝。
 
 验证：
 

@@ -70,8 +70,10 @@ chmod +x bring-back-gemini.sh
 1. 先验证所有选中文件是安全 JSON 对象；任一验证失败则完全不停止 Chrome、不写文件。
 2. 递归地把**已有、大小写完全匹配**的 `is_glic_eligible` 改为布尔值 `true`，不会凭空创建该键。
 3. 把顶层 `variations_country` 设为 `us`。
-4. 若 `variations_permanent_consistency_country` 是至少两项的数组，且同目录有 `Last Version`，则把前两项设为去除首尾空白的版本号和 `us`。缺少版本文件不妨碍其他修改。
-5. 使用同目录临时文件原子替换 `Local State`，尽量保留文件权限与无关 JSON；按要求不创建备份。
+4. 把顶层 `variations_permanent_overridden_country` 设为 `us`——这是 Chromium 官方留给测试/开发的 permanent country override，优先级高于第 5 项的 consistency cache。
+5. 若 `variations_permanent_consistency_country` 是至少两项的数组，且同目录有 `Last Version`，则把前两项设为去除首尾空白的版本号和 `us`。缺少版本文件不妨碍其他修改。
+6. 始终把 `browser.enabled_labs_experiments` 规范化为包含 `glic@1`（即 `chrome://flags/#glic → Enabled` 的持久化等价物）：移除任何 `glic`、`glic@0`、`glic@1`、`glic@2` 旧值后加入 `glic@1`，其余 flag（含非字符串项）原样保留。
+7. 使用同目录临时文件原子替换 `Local State`，尽量保留文件权限与无关 JSON；按要求不创建备份。
 
 Dry-run 绝不停止、写入、提权或重启。自定义目录适合测试。正常频道仅按内置的规范完整可执行路径匹配进程，先请求正常退出并限时等待，超时才警告并强制停止；不会按裸进程名任意杀进程。Windows 会匹配每个频道在 Program Files、Program Files (x86) 和用户目录中的全部标准候选路径，并只重启实际捕获的路径。非标准安装位置、符号链接或包装器路径仍可能无法匹配，此时必须先手动关闭 Chrome。PowerShell 对 JSON 采用明确的保守嵌套上限 **80 层**（输出仍使用 `ConvertTo-Json -Depth 100`），超过上限会在停止或写入前拒绝。
 
@@ -87,7 +89,7 @@ Dry-run 绝不停止、写入、提权或重启。自定义目录适合测试。
 .\bring-back-gemini.ps1 -DisableAIDownload -PolicyScope Auto
 ```
 
-启用后会规范化 `optimization-guide-on-device-model@2` 与 `prompt-api-for-gemini-nano@2`，保留其他 flag（包括非字符串项），并设置官方整数策略 [`GenAILocalFoundationalModelSettings=1`](https://chromeenterprise.google/policies/#GenAILocalFoundationalModelSettings)：
+启用后会在上述 `glic@1` 规范化之外，再把 `optimization-guide-on-device-model@2` 与 `prompt-api-for-gemini-nano@2` 规范化，保留其他 flag（包括非字符串项），并设置官方整数策略 [`GenAILocalFoundationalModelSettings=1`](https://chromeenterprise.google/policies/#GenAILocalFoundationalModelSettings)：
 
 - Windows：`HKCU` 或 `HKLM\SOFTWARE\Policies\Google\Chrome`；`Auto` 严格按当前是否管理员选择 User/Machine。
 - macOS：`defaults` 域 `com.google.Chrome`。

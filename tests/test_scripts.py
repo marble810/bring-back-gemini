@@ -110,6 +110,7 @@ class ScriptTests(unittest.TestCase):
             ],
             "variations_country": "de",
             "variations_permanent_consistency_country": ["old", "ca", "keep"],
+            "browser": {"enabled_labs_experiments": ["glic", "glic@2", "keep@1"]},
             "unrelated": {"value": "保留"},
         }
 
@@ -119,7 +120,9 @@ class ScriptTests(unittest.TestCase):
         self.assertIs(value["nested"][0]["is_glic_eligible"], True)
         self.assertIs(value["nested"][1]["different_case"]["Is_glic_eligible"], False)
         self.assertEqual(value["variations_country"], "us")
+        self.assertEqual(value["variations_permanent_overridden_country"], "us")
         self.assertEqual(value["variations_permanent_consistency_country"], ["123.45.6", "us", "keep"])
+        self.assertEqual(value["browser"]["enabled_labs_experiments"], ["keep@1", "glic@1"])
         self.assertEqual(value["unrelated"], {"value": "保留"})
 
     def test_shell_live_core_without_backup_and_idempotence(self):
@@ -144,7 +147,8 @@ class ScriptTests(unittest.TestCase):
     def test_shell_flag_normalization_and_preservation(self):
         state = self.write_state({
             "browser": {"enabled_labs_experiments": [
-                "keep@1", "optimization-guide-on-device-model@1",
+                "keep@1", "glic", "glic@0", "glic@2",
+                "optimization-guide-on-device-model@1",
                 "optimization-guide-on-device-model@2",
                 "prompt-api-for-gemini-nano", "prompt-api-for-gemini-nano@1",
                 "prompt-api-for-gemini-nano@99",
@@ -155,11 +159,12 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         result_value = json.loads(state.read_text(encoding="utf-8"))
         flags = result_value["browser"]["enabled_labs_experiments"]
-        self.assertEqual(flags, ["keep@1", 7, {"keep": True},
+        self.assertEqual(flags, ["keep@1", 7, {"keep": True}, "glic@1",
                                  "optimization-guide-on-device-model@2",
                                  "prompt-api-for-gemini-nano@2"])
         self.assertNotIn("is_glic_eligible", result_value)
         self.assertEqual(result_value["variations_country"], "us")
+        self.assertEqual(result_value["variations_permanent_overridden_country"], "us")
 
     def test_shell_rejects_malformed_and_unsafe_schema_without_write(self):
         state = self.profile / "Local State"
@@ -258,10 +263,11 @@ class ScriptTests(unittest.TestCase):
         value = json.loads(state.read_text(encoding="utf-8-sig"))
         self.assertEqual(value["Variations_country"], "de")
         self.assertEqual(value["variations_country"], "us")
+        self.assertEqual(value["variations_permanent_overridden_country"], "us")
         self.assertEqual(value["Variations_permanent_consistency_country"], ["old", "de"])
         self.assertEqual(value["browser"]["Enabled_labs_experiments"], ["wrong-case-preserve"])
         self.assertEqual(value["browser"]["enabled_labs_experiments"], [
-            "optimization-guide-on-device-model@2", "prompt-api-for-gemini-nano@2"
+            "glic@1", "optimization-guide-on-device-model@2", "prompt-api-for-gemini-nano@2"
         ])
 
         state.write_text(json.dumps({"Browser": {"marker": "preserve"}}), encoding="utf-8")
@@ -270,17 +276,20 @@ class ScriptTests(unittest.TestCase):
         second_value = json.loads(state.read_text(encoding="utf-8-sig"))
         self.assertEqual(second_value["Browser"], {"marker": "preserve"})
         self.assertIn("browser", second_value)
+        self.assertEqual(second_value["browser"]["enabled_labs_experiments"], [
+            "glic@1", "optimization-guide-on-device-model@2", "prompt-api-for-gemini-nano@2"
+        ])
 
     def test_powershell_bare_flag_normalization_preserves_other_entries(self):
         state = self.write_state({"browser": {"enabled_labs_experiments": [
-            "keep@1", "optimization-guide-on-device-model",
+            "keep@1", "glic@0", "optimization-guide-on-device-model",
             "optimization-guide-on-device-model@7",
             "prompt-api-for-gemini-nano", 9, {"keep": True}
         ]}})
         result = self.run_ps_with_mock_policy()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         flags = json.loads(state.read_text(encoding="utf-8-sig"))["browser"]["enabled_labs_experiments"]
-        self.assertEqual(flags, ["keep@1", 9, {"keep": True},
+        self.assertEqual(flags, ["keep@1", 9, {"keep": True}, "glic@1",
                                  "optimization-guide-on-device-model@2",
                                  "prompt-api-for-gemini-nano@2"])
 

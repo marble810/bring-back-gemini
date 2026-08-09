@@ -268,6 +268,9 @@ function Convert-LocalState([string]$Path, [bool]$Disable) {
     Set-GlicEligibleRecursive $data
     $countryEntry = Get-ExactJsonValue $data 'variations_country'
     $data['variations_country'] = 'us'
+    # Chromium 官方为测试/开发预留的 permanent country override，优先级高于
+    # variations_permanent_consistency_country（见 variations_field_trial_creator_base）。
+    $data['variations_permanent_overridden_country'] = 'us'
 
     $permanentEntry = Get-ExactJsonValue $data 'variations_permanent_consistency_country'
     $lastVersion = Join-Path ([IO.Path]::GetDirectoryName($Path)) 'Last Version'
@@ -279,29 +282,36 @@ function Convert-LocalState([string]$Path, [bool]$Disable) {
         }
     }
 
-    if ($Disable) {
-        if (-not $browserEntry.Found) {
-            $browser = New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
-            $data.Add('browser', $browser)
-        } else { $browser = $browserEntry.Value }
-        $flagEntry = Get-ExactJsonValue $browser 'enabled_labs_experiments'
-        if (-not $flagEntry.Found -or $null -eq $flagEntry.Value) { $flags = @() }
-        elseif ($flagEntry.Value -isnot [System.Collections.IList]) { throw 'browser.enabled_labs_experiments 必须是数组' }
-        else { $flags = @($flagEntry.Value) }
-        $normalized = New-Object System.Collections.ArrayList
-        foreach ($flag in $flags) {
-            $remove = $false
-            if ($flag -is [string]) {
+    # 始终规范化 browser.enabled_labs_experiments：启用 glic@1（chrome://flags/#glic
+    # → Enabled 的持久化等价物），移除任意 glic/glic@N 旧值并保留其他 flag；
+    # -DisableAIDownload 时额外把两个本地 AI 模型 flag 规范化为 @2。
+    if (-not $browserEntry.Found) {
+        $browser = New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
+        $data.Add('browser', $browser)
+    } else { $browser = $browserEntry.Value }
+    $flagEntry = Get-ExactJsonValue $browser 'enabled_labs_experiments'
+    if (-not $flagEntry.Found -or $null -eq $flagEntry.Value) { $flags = @() }
+    elseif ($flagEntry.Value -isnot [System.Collections.IList]) { throw 'browser.enabled_labs_experiments 必须是数组' }
+    else { $flags = @($flagEntry.Value) }
+    $normalized = New-Object System.Collections.ArrayList
+    foreach ($flag in $flags) {
+        $remove = $false
+        if ($flag -is [string]) {
+            if ($flag -ceq 'glic' -or $flag.StartsWith('glic@', [StringComparison]::Ordinal)) { $remove = $true }
+            elseif ($Disable) {
                 foreach ($base in @('optimization-guide-on-device-model','prompt-api-for-gemini-nano')) {
                     if ($flag -ceq $base -or $flag.StartsWith(($base + '@'), [StringComparison]::Ordinal)) { $remove = $true }
                 }
             }
-            if (-not $remove) { [void]$normalized.Add($flag) }
         }
+        if (-not $remove) { [void]$normalized.Add($flag) }
+    }
+    [void]$normalized.Add('glic@1')
+    if ($Disable) {
         [void]$normalized.Add('optimization-guide-on-device-model@2')
         [void]$normalized.Add('prompt-api-for-gemini-nano@2')
-        $browser['enabled_labs_experiments'] = [object[]]$normalized.ToArray()
     }
+    $browser['enabled_labs_experiments'] = [object[]]$normalized.ToArray()
 
     $after = $data | ConvertTo-Json -Depth 100 -Compress
     return [pscustomobject]@{ Data=$data; Changed=($before -cne $after); SourceHash=$sourceHash }
