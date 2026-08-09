@@ -5,8 +5,8 @@
 ## [[../run.sh]] / [[../run.ps1]]
 
 - 内置经过发布验证的主脚本提交 SHA，不依赖 GitHub API。
-- 从该不可变提交下载 `checksums.sha256` 与对应平台主脚本。
-- 校验 SHA-256，随后显示安全菜单；有参数时原样转交主脚本。
+- 从该不可变提交下载对应平台主脚本。
+- 显示安全菜单；有参数时原样转交主脚本。
 - 被 README 的一条命令调用；调用对应的 `bring-back-gemini.*`。
 
 ## [[../bring-back-gemini.sh]]
@@ -20,16 +20,12 @@
 ## [[../bring-back-gemini.ps1]]
 
 - `param` / `Show-Help`：兼容 Windows PowerShell 5.1 的参数面。
-- `ConvertTo-OrdinalJsonTree` / `Get-ExactJsonValue`：大小写精确的结构键访问。
-- `Assert-SafeJsonNumbers` / `Convert-LocalState`：数值、80 层限制、递归变换与源哈希快照。
-- `$changedPlans`：验证完成后的进程处理；写入循环会重新读取并在提交前校验哈希。
+- `ConvertTo-OrdinalJsonTree`：大小写精确的结构键访问。
+- `Convert-LocalState`：解析、递归变换，并保留源字节快照。
+- `$changedPlans`：验证完成后的进程处理；写入循环会重新读取，并在提交前做字节比对。
 - `MoveFileExW`：同卷覆盖重命名且不保留备份；注册表段按管理员身份决定 Auto 范围。
 - `Restart-CapturedChrome` / `finally`：所有退出路径统一尽力重启实际捕获的标准候选路径。
 
-## [[../checksums.sha256]]
-
-记录两份主脚本的发布哈希。修改主脚本后必须重新生成，否则远程启动器会拒绝运行。
-
 ## [[../tests/test_scripts.py]]
 
-黑盒覆盖递归、国家字段、flag 保留/规范化、幂等、无备份写入、根/深度/schema 异常与 dry-run。策略测试通过 [[../tests/Invoke-WithMockPolicy.ps1]] 隔离注册表。参见 [[diagrams]]。
+黑盒覆盖递归、国家字段、flag 保留/规范化、幂等、无备份写入、根/schema 异常与 dry-run。策略测试通过 [[../tests/Invoke-WithMockPolicy.ps1]] 隔离注册表。参见 [[diagrams]]。

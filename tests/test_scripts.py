@@ -1,5 +1,4 @@
 from functools import partial
-import hashlib
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -16,7 +15,6 @@ SH = ROOT / "bring-back-gemini.sh"
 PS = ROOT / "bring-back-gemini.ps1"
 RUN_SH = ROOT / "run.sh"
 RUN_PS = ROOT / "run.ps1"
-CHECKSUMS = ROOT / "checksums.sha256"
 PS_MOCK_POLICY = ROOT / "tests" / "Invoke-WithMockPolicy.ps1"
 
 
@@ -227,31 +225,6 @@ class ScriptTests(unittest.TestCase):
             self.assertEqual(state.read_text(encoding="utf-8"), unsafe)
             self.assertEqual(list(self.profile.glob("*.backup-*")), [])
 
-    def test_powershell_rejects_unsafe_numbers_without_write(self):
-        state = self.profile / "Local State"
-        unsafe_numbers = (
-            '{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}',
-            '{"value":1e400}', '{"value":9007199254740993}'
-        )
-        for raw in unsafe_numbers:
-            state.write_text(raw, encoding="utf-8")
-            result = self.run_ps("-DryRun")
-            self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-            self.assertEqual(state.read_text(encoding="utf-8"), raw)
-            self.assertEqual(list(self.profile.glob("Local State.backup-*")), [])
-
-    def test_powershell_rejects_excessive_depth_without_write(self):
-        value = {"leaf": False}
-        for _ in range(81):
-            value = {"nested": value}
-        state = self.write_state(value, version=None)
-        original = state.read_bytes()
-        result = self.run_ps("-DryRun")
-        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
-        self.assertIn("80", result.stdout + result.stderr)
-        self.assertEqual(state.read_bytes(), original)
-        self.assertEqual(list(self.profile.glob("*.backup-*")), [])
-
     def test_powershell_exact_structural_keys_and_flag_normalization(self):
         state = self.write_state({
             "Variations_country": "de",
@@ -293,21 +266,12 @@ class ScriptTests(unittest.TestCase):
                                  "optimization-guide-on-device-model@2",
                                  "prompt-api-for-gemini-nano@2"])
 
-    def test_bootstrap_checksums_match_payloads(self):
-        entries = {}
-        for line in CHECKSUMS.read_text(encoding="ascii").splitlines():
-            digest, name = line.split(None, 1)
-            entries[name.strip().lstrip("*")] = digest.lower()
-        for payload in (SH, PS):
-            actual = hashlib.sha256(payload.read_bytes()).hexdigest()
-            self.assertEqual(entries.get(payload.name), actual)
-
-    def test_bootstraps_download_immutable_verified_payloads(self):
+    def test_bootstraps_download_pinned_commit_payloads(self):
         sha = "0123456789abcdef0123456789abcdef01234567"
         server_root = Path(self.temp.name) / "server"
         commit_root = server_root / "raw" / sha
         commit_root.mkdir(parents=True)
-        for source in (CHECKSUMS, SH, PS):
+        for source in (SH, PS):
             shutil.copy2(source, commit_root / source.name)
 
         class QuietHandler(SimpleHTTPRequestHandler):
@@ -345,7 +309,7 @@ class ScriptTests(unittest.TestCase):
                     shell_command, text=True, capture_output=True, env=env, timeout=30,
                 )
                 self.assertEqual(shell_result.returncode, 0, shell_result.stdout + shell_result.stderr)
-                self.assertIn("SHA-256", shell_result.stdout)
+                self.assertIn("已下载", shell_result.stdout)
                 self.assertEqual(list(bootstrap_tmp.glob("bring-back-gemini-run.*")), [])
 
             ps_env = os.environ.copy()
@@ -361,7 +325,7 @@ class ScriptTests(unittest.TestCase):
                 text=True, capture_output=True, env=ps_env, timeout=30,
             )
             self.assertEqual(ps_result.returncode, 0, ps_result.stdout + ps_result.stderr)
-            self.assertIn("SHA-256", ps_result.stdout)
+            self.assertIn("已下载", ps_result.stdout)
             self.assertEqual((self.profile / "Local State").read_bytes(), original)
 
             # Canonical full commit IDs are mandatory; abbreviated IDs must be rejected.
@@ -392,12 +356,14 @@ class ScriptTests(unittest.TestCase):
         write_loop = ps_source[ps_source.index("foreach ($plan in $changedPlans)"):]
         self.assertIn("$fresh = Convert-LocalState $plan.Path", write_loop)
         self.assertIn("if (-not $fresh.Changed)", write_loop)
-        self.assertIn("Get-FileSha256 $plan.Path", write_loop)
-        self.assertIn("$fresh.SourceHash", write_loop)
+        self.assertIn("$fresh.SourceBytes", write_loop)
+        self.assertIn("ReadAllBytes($plan.Path)", write_loop)
         self.assertIn("Replace-FileWithoutBackup $temp $plan.Path", write_loop)
         self.assertIn("MoveFileEx", ps_source)
         self.assertNotIn(".backup-", write_loop)
         self.assertNotIn("$plan.Data | ConvertTo-Json", write_loop)
+        self.assertNotIn("Get-FileSha256", ps_source)
+        self.assertNotIn("SourceHash", ps_source)
         self.assertIn("function Restart-CapturedChrome", ps_source)
         self.assertIn("finally {\n    Restart-CapturedChrome", ps_source)
         self.assertIn("$_.Target.Exes", ps_source)
@@ -405,6 +371,7 @@ class ScriptTests(unittest.TestCase):
         self.assertIn('if current_file.read() != raw:', sh_source)
         self.assertIn('os.replace(temp, path)', sh_source)
         self.assertIn("grep -q '^CHANGED=0$'", sh_source)
+        self.assertNotIn("os.fsync(dfd)", sh_source)
 
 
 if __name__ == "__main__":

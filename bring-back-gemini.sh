@@ -164,16 +164,11 @@ if mode == "write" and changed:
             json.dump(new, f, ensure_ascii=False, indent=2, allow_nan=False)
             f.write("\n"); f.flush(); os.fsync(f.fileno())
         os.chmod(temp, source_mode)
-        # Best-effort lock-free compare-before-swap guard. A tiny POSIX race remains
-        # between this byte comparison and os.replace, documented in README.
+        # Compare-before-replace; a tiny race remains between this check and os.replace.
         with open(path, "rb") as current_file:
             if current_file.read() != raw:
                 raise RuntimeError("Local State 在计划后再次变化；已中止以避免覆盖并发更新")
         os.replace(temp, path)
-        try:
-            dfd = os.open(directory, os.O_RDONLY); os.fsync(dfd); os.close(dfd)
-        except OSError:
-            pass
     except Exception:
         try: os.unlink(temp)
         except OSError: pass

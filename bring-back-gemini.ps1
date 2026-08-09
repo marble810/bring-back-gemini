@@ -134,8 +134,6 @@ if ($UserDataDir) {
     }
 }
 
-$script:MaxSupportedJsonDepth = 80
-
 function ConvertTo-OrdinalJsonTree($Value) {
     if ($null -eq $Value) { return $null }
     if ($Value -is [System.Collections.IList]) {
@@ -151,76 +149,6 @@ function ConvertTo-OrdinalJsonTree($Value) {
         return $dictionary
     }
     return $Value
-}
-
-function Test-JsonObject($Value) {
-    return ($null -ne $Value -and $Value -is [System.Collections.IDictionary])
-}
-
-function Get-ExactJsonValue($Object, [string]$Name) {
-    if ($Object -is [System.Collections.IDictionary] -and $Object.ContainsKey($Name)) {
-        return [pscustomobject]@{ Found=$true; Value=$Object[$Name] }
-    }
-    return [pscustomobject]@{ Found=$false; Value=$null }
-}
-
-function Get-JsonNestingDepth($Value) {
-    if ($null -eq $Value -or $Value -is [string] -or $Value.GetType().IsPrimitive) { return 0 }
-    $maximum = 0
-    if ($Value -is [System.Collections.IDictionary]) {
-        foreach ($key in @($Value.Keys)) {
-            $child = Get-JsonNestingDepth $Value[$key]
-            if ($child -gt $maximum) { $maximum = $child }
-        }
-        return (1 + $maximum)
-    }
-    if ($Value -is [System.Collections.IList]) {
-        foreach ($entry in $Value) {
-            $child = Get-JsonNestingDepth $entry
-            if ($child -gt $maximum) { $maximum = $child }
-        }
-        return (1 + $maximum)
-    }
-    return 0
-}
-
-function Assert-SafeJsonNumbers($Value) {
-    if ($null -eq $Value) { return }
-    if ($Value -is [System.Collections.IDictionary]) {
-        foreach ($key in @($Value.Keys)) { Assert-SafeJsonNumbers $Value[$key] }
-        return
-    }
-    if ($Value -is [System.Collections.IList]) {
-        foreach ($entry in $Value) { Assert-SafeJsonNumbers $entry }
-        return
-    }
-    $typeCode = [Type]::GetTypeCode($Value.GetType())
-    if ($typeCode -eq [TypeCode]::Single -or $typeCode -eq [TypeCode]::Double) {
-        $number = [double]$Value
-        if ([double]::IsNaN($number) -or [double]::IsInfinity($number)) {
-            throw 'Local State 包含 NaN 或 Infinity 等非有限数值'
-        }
-        if ([Math]::Truncate($number) -eq $number -and [Math]::Abs($number) -gt 9007199254740991.0) {
-            throw 'Local State 包含超出可互操作精确整数范围的浮点整数'
-        }
-        return
-    }
-    if ($typeCode -in @([TypeCode]::Int64, [TypeCode]::UInt64, [TypeCode]::Decimal)) {
-        $decimal = [decimal]$Value
-        if ([decimal]::Truncate($decimal) -eq $decimal -and [Math]::Abs($decimal) -gt [decimal]9007199254740991) {
-            throw 'Local State 包含超出可互操作精确整数范围的整数'
-        }
-    }
-}
-
-function Get-BytesSha256([byte[]]$Bytes) {
-    $sha = [Security.Cryptography.SHA256]::Create()
-    try { return ([BitConverter]::ToString($sha.ComputeHash($Bytes))).Replace('-', '').ToLowerInvariant() }
-    finally { $sha.Dispose() }
-}
-
-function Get-FileSha256([string]$Path) {
-    return Get-BytesSha256 ([IO.File]::ReadAllBytes($Path))
 }
 
 function Set-GlicEligibleRecursive($Value) {
@@ -241,58 +169,60 @@ function Set-GlicEligibleRecursive($Value) {
 
 function Convert-LocalState([string]$Path, [bool]$Disable) {
     $sourceBytes = [IO.File]::ReadAllBytes($Path)
-    $sourceHash = Get-BytesSha256 $sourceBytes
     $text = [Text.Encoding]::UTF8.GetString($sourceBytes)
+    # ConvertFrom-Json 会把单元素数组拆成对象，因此先要求根文本以 { 开头。
     $rootProbe = $text.TrimStart()
     if ($rootProbe.StartsWith([string][char]0xFEFF, [StringComparison]::Ordinal)) {
         $rootProbe = $rootProbe.Substring(1).TrimStart()
     }
     if ($rootProbe.Length -eq 0 -or $rootProbe[0] -ne '{') {
-        throw 'Local State 根节点必须以 { 开始且必须是 JSON 对象'
+        throw 'Local State 根节点必须是 JSON 对象'
     }
     try { $parsed = $text | ConvertFrom-Json -ErrorAction Stop }
     catch { throw "JSON 解析失败: $($_.Exception.Message)" }
     $data = ConvertTo-OrdinalJsonTree $parsed
-    if (-not (Test-JsonObject $data)) { throw 'Local State 根节点必须是 JSON 对象' }
-    Assert-SafeJsonNumbers $data
-    $depth = Get-JsonNestingDepth $data
-    if ($depth -gt $script:MaxSupportedJsonDepth) {
-        throw "Local State JSON 嵌套深度 $depth 超过 PowerShell 安全上限 $script:MaxSupportedJsonDepth"
+    if ($null -eq $data -or $data -isnot [System.Collections.IDictionary]) {
+        throw 'Local State 根节点必须是 JSON 对象'
     }
-    $browserEntry = Get-ExactJsonValue $data 'browser'
-    if ($browserEntry.Found -and -not (Test-JsonObject $browserEntry.Value)) {
+    if ($data.ContainsKey('browser') -and $data['browser'] -isnot [System.Collections.IDictionary]) {
         throw 'Local State 的 browser 必须是对象'
     }
 
     $before = $data | ConvertTo-Json -Depth 100 -Compress
     Set-GlicEligibleRecursive $data
-    $countryEntry = Get-ExactJsonValue $data 'variations_country'
     $data['variations_country'] = 'us'
     # Chromium 官方为测试/开发预留的 permanent country override，优先级高于
     # variations_permanent_consistency_country（见 variations_field_trial_creator_base）。
     $data['variations_permanent_overridden_country'] = 'us'
 
-    $permanentEntry = Get-ExactJsonValue $data 'variations_permanent_consistency_country'
     $lastVersion = Join-Path ([IO.Path]::GetDirectoryName($Path)) 'Last Version'
-    if ($permanentEntry.Found -and $permanentEntry.Value -is [System.Collections.IList] -and $permanentEntry.Value.Count -ge 2 -and [IO.File]::Exists($lastVersion)) {
-        $version = [IO.File]::ReadAllText($lastVersion, [Text.Encoding]::UTF8).Trim()
-        if ($version.Length -gt 0) {
-            $permanentEntry.Value[0] = $version
-            $permanentEntry.Value[1] = 'us'
+    if ($data.ContainsKey('variations_permanent_consistency_country')) {
+        $permanent = $data['variations_permanent_consistency_country']
+        if ($permanent -is [System.Collections.IList] -and $permanent.Count -ge 2 -and [IO.File]::Exists($lastVersion)) {
+            $version = [IO.File]::ReadAllText($lastVersion, [Text.Encoding]::UTF8).Trim()
+            if ($version.Length -gt 0) {
+                $permanent[0] = $version
+                $permanent[1] = 'us'
+            }
         }
     }
 
     # 始终规范化 browser.enabled_labs_experiments：启用 glic@1（chrome://flags/#glic
     # → Enabled 的持久化等价物），移除任意 glic/glic@N 旧值并保留其他 flag；
     # -DisableAIDownload 时额外把两个本地 AI 模型 flag 规范化为 @2。
-    if (-not $browserEntry.Found) {
+    if (-not $data.ContainsKey('browser')) {
         $browser = New-Object 'System.Collections.Generic.Dictionary[string,object]' ([StringComparer]::Ordinal)
         $data.Add('browser', $browser)
-    } else { $browser = $browserEntry.Value }
-    $flagEntry = Get-ExactJsonValue $browser 'enabled_labs_experiments'
-    if (-not $flagEntry.Found -or $null -eq $flagEntry.Value) { $flags = @() }
-    elseif ($flagEntry.Value -isnot [System.Collections.IList]) { throw 'browser.enabled_labs_experiments 必须是数组' }
-    else { $flags = @($flagEntry.Value) }
+    } else {
+        $browser = $data['browser']
+    }
+    if (-not $browser.ContainsKey('enabled_labs_experiments') -or $null -eq $browser['enabled_labs_experiments']) {
+        $flags = @()
+    } elseif ($browser['enabled_labs_experiments'] -isnot [System.Collections.IList]) {
+        throw 'browser.enabled_labs_experiments 必须是数组'
+    } else {
+        $flags = @($browser['enabled_labs_experiments'])
+    }
     $normalized = New-Object System.Collections.ArrayList
     foreach ($flag in $flags) {
         $remove = $false
@@ -314,7 +244,7 @@ function Convert-LocalState([string]$Path, [bool]$Disable) {
     $browser['enabled_labs_experiments'] = [object[]]$normalized.ToArray()
 
     $after = $data | ConvertTo-Json -Depth 100 -Compress
-    return [pscustomobject]@{ Data=$data; Changed=($before -cne $after); SourceHash=$sourceHash }
+    return [pscustomobject]@{ Data=$data; Changed=($before -cne $after); SourceBytes=$sourceBytes }
 }
 
 # Validate and plan every selected JSON before querying/stopping Chrome or writing anything.
@@ -441,11 +371,16 @@ foreach ($plan in $changedPlans) {
         $temp = Join-Path $directory ('.local-state-' + [Guid]::NewGuid().ToString('N') + '.tmp')
         $json = $fresh.Data | ConvertTo-Json -Depth 100
         [IO.File]::WriteAllText($temp, $json + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
-        # Verify the exact byte snapshot used to build this output is still current.
-        if ((Get-FileSha256 $plan.Path) -cne $fresh.SourceHash) {
+        # Reject concurrent updates between the fresh read and this replace.
+        $currentBytes = [IO.File]::ReadAllBytes($plan.Path)
+        if ($currentBytes.Length -ne $fresh.SourceBytes.Length) {
             throw 'Local State 在计划后再次变化；为避免覆盖并发更新，已中止该目标'
         }
-        # Atomic same-volume replacement through ReplaceFileW with a null backup path.
+        for ($i = 0; $i -lt $currentBytes.Length; $i++) {
+            if ($currentBytes[$i] -ne $fresh.SourceBytes[$i]) {
+                throw 'Local State 在计划后再次变化；为避免覆盖并发更新，已中止该目标'
+            }
+        }
         Replace-FileWithoutBackup $temp $plan.Path
         $temp = $null
         Write-Host "[$($plan.Target.Label)] 已修改（未创建备份）: $($plan.Path)"
