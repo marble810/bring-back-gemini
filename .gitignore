@@ -1,0 +1,18 @@
+# Local State backups and atomic-write leftovers
+*.backup-*
+.local-state-*
+
+# Test/runtime temporary files
+.tmp/
+tmp/
+__pycache__/
+*.py[cod]
+
+# Local orchestration artifacts
+.pi-subagents/
+
+# Editor/OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
