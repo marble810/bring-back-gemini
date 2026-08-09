@@ -1,5 +1,4 @@
-# Local State backups and atomic-write leftovers
-*.backup-*
+# Atomic-write leftovers
 .local-state-*
 
 # Test/runtime temporary files

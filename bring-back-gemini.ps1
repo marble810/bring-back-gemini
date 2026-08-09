@@ -14,6 +14,36 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if (-not ('BringBackGemini.NativeFile' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace BringBackGemini {
+    public static class NativeFile {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true, EntryPoint = "MoveFileExW")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool MoveFileEx(
+            string existingFileName,
+            string newFileName,
+            uint flags);
+    }
+}
+'@
+}
+
+function Replace-FileWithoutBackup([string]$ReplacementPath, [string]$DestinationPath) {
+    # Preserve the destination ACL, then atomically rename the same-volume temp file over it.
+    $acl = Get-Acl -LiteralPath $DestinationPath
+    Set-Acl -LiteralPath $ReplacementPath -AclObject $acl
+    $replaceExistingAndWriteThrough = [uint32]9
+    $ok = [BringBackGemini.NativeFile]::MoveFileEx(
+        $ReplacementPath, $DestinationPath, $replaceExistingAndWriteThrough)
+    if (-not $ok) {
+        $code = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw (New-Object ComponentModel.Win32Exception($code))
+    }
+}
+
 function Show-Help {
 @'
 用法: .\bring-back-gemini.ps1 [选项]
@@ -376,22 +406,16 @@ if ($changedPlans.Count -gt 0) {
 }
 
 foreach ($plan in $changedPlans) {
-    $backup = $null
     $temp = $null
-    $replacementOccurred = $false
     try {
         # The file may have changed while Chrome was shutting down. Re-read and recompute
-        # immediately before backup/write; never serialize the pre-shutdown plan object.
+        # immediately before writing; never serialize the pre-shutdown plan object.
         $fresh = Convert-LocalState $plan.Path ([bool]$DisableAIDownload)
         if (-not $fresh.Changed) {
-            Write-Host "[$($plan.Target.Label)] 关闭 Chrome 后已无需修改，跳过备份: $($plan.Path)"
+            Write-Host "[$($plan.Target.Label)] 关闭 Chrome 后已无需修改: $($plan.Path)"
             continue
         }
-        $stamp = [DateTime]::Now.ToString('yyyyMMdd-HHmmss-fffffff')
         $directory = [IO.Path]::GetDirectoryName($plan.Path)
-        do {
-            $backup = $plan.Path + '.backup-' + $stamp + '-' + [Guid]::NewGuid().ToString('N')
-        } while ([IO.File]::Exists($backup))
         $temp = Join-Path $directory ('.local-state-' + [Guid]::NewGuid().ToString('N') + '.tmp')
         $json = $fresh.Data | ConvertTo-Json -Depth 100
         [IO.File]::WriteAllText($temp, $json + [Environment]::NewLine, (New-Object Text.UTF8Encoding($false)))
@@ -399,20 +423,13 @@ foreach ($plan in $changedPlans) {
         if ((Get-FileSha256 $plan.Path) -cne $fresh.SourceHash) {
             throw 'Local State 在计划后再次变化；为避免覆盖并发更新，已中止该目标'
         }
-        # File.Replace atomically displaces the current file into the final user-facing backup.
-        [IO.File]::Replace($temp, $plan.Path, $backup)
-        $replacementOccurred = $true
+        # Atomic same-volume replacement through ReplaceFileW with a null backup path.
+        Replace-FileWithoutBackup $temp $plan.Path
         $temp = $null
-        Write-Host "[$($plan.Target.Label)] 已修改: $($plan.Path)"
-        Write-Host "[$($plan.Target.Label)] 备份: $backup"
+        Write-Host "[$($plan.Target.Label)] 已修改（未创建备份）: $($plan.Path)"
     } catch {
         if ($temp -and [IO.File]::Exists($temp)) { Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue }
         [Console]::Error.WriteLine("[$($plan.Target.Label)] 写入失败: $($plan.Path)`n$($_.Exception.Message)")
-        if ($replacementOccurred -and $backup -and [IO.File]::Exists($backup)) {
-            [Console]::Error.WriteLine("[$($plan.Target.Label)] 已保留精确替换备份: $backup")
-        } elseif ($backup -and [IO.File]::Exists($backup)) {
-            Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue
-        }
         $status = 2
     }
 }

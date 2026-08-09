@@ -96,7 +96,7 @@ fi
 # is_glic_eligible, and uses a same-directory temporary file plus os.replace.
 run_json() {
   python3 - "$1" "$2" "$3" <<'PY'
-import copy, datetime, json, os, shutil, sys, tempfile
+import copy, json, os, sys, tempfile
 path, mode, disable = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 def reject_constant(value):
     raise ValueError("不允许非标准 JSON 数值: " + value)
@@ -144,24 +144,6 @@ if disable:
 changed = new != data
 print("CHANGED=" + ("1" if changed else "0"))
 if mode == "write" and changed:
-    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-    backup = path + ".backup-" + stamp
-    # Exclusive backup naming, even under extremely unlikely clock collisions.
-    candidate, suffix = backup, 0
-    while True:
-        try:
-            fd = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-            backup = candidate; break
-        except FileExistsError:
-            suffix += 1; candidate = backup + "-" + str(suffix)
-    try:
-        with os.fdopen(fd, "wb") as backup_file:
-            backup_file.write(raw)
-            backup_file.flush(); os.fsync(backup_file.fileno())
-    except Exception:
-        try: os.unlink(backup)
-        except OSError: pass
-        raise
     directory = os.path.dirname(path) or "."
     fd, temp = tempfile.mkstemp(prefix=".local-state-", dir=directory)
     try:
@@ -182,10 +164,7 @@ if mode == "write" and changed:
     except Exception:
         try: os.unlink(temp)
         except OSError: pass
-        try: os.unlink(backup)
-        except OSError: pass
         raise
-    print("BACKUP=" + backup, flush=True)
 PY
 }
 
@@ -306,11 +285,9 @@ for idx in "${PLAN_CHANGED[@]}"; do
   state="${ROOTS[$idx]}/Local State"
   if output=$(run_json "$state" write "$DISABLE_AI_DOWNLOAD" 2>&1); then
     if grep -q '^CHANGED=0$' <<< "$output"; then
-      printf '[%s] 关闭 Chrome 后已无需修改，跳过备份: %s\n' "${LABELS[$idx]}" "$state"
+      printf '[%s] 关闭 Chrome 后已无需修改: %s\n' "${LABELS[$idx]}" "$state"
     else
-      printf '[%s] 已修改: %s\n' "${LABELS[$idx]}" "$state"
-      backup=$(sed -n 's/^BACKUP=//p' <<< "$output")
-      [[ -n "$backup" ]] && printf '[%s] 备份: %s\n' "${LABELS[$idx]}" "$backup"
+      printf '[%s] 已修改（未创建备份）: %s\n' "${LABELS[$idx]}" "$state"
     fi
   else
     printf '[%s] 写入失败: %s\n%s\n' "${LABELS[$idx]}" "$state" "$output" >&2

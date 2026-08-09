@@ -13,7 +13,7 @@
 
 - `usage` / 参数循环：CLI 与退出码。
 - 频道映射：Stable/Beta/Dev/Canary 用户目录及已知可执行路径。
-- `run_json`：嵌入 Python 的验证、递归变换、备份和原子替换。
+- `run_json`：嵌入 Python 的验证、递归变换和无备份原子替换。
 - `stop_selected`：按完整路径正常退出、限时等待和强停。
 - 末段：平台策略安装及可选重启。
 
@@ -23,7 +23,7 @@
 - `ConvertTo-OrdinalJsonTree` / `Get-ExactJsonValue`：大小写精确的结构键访问。
 - `Assert-SafeJsonNumbers` / `Convert-LocalState`：数值、80 层限制、递归变换与源哈希快照。
 - `$changedPlans`：验证完成后的进程处理；写入循环会重新读取并在提交前校验哈希。
-- `File.Replace`：同卷原子替换并直接生成精确的被替换文件备份；注册表段按管理员身份决定 Auto 范围。
+- `MoveFileExW`：同卷覆盖重命名且不保留备份；注册表段按管理员身份决定 Auto 范围。
 - `Restart-CapturedChrome` / `finally`：所有退出路径统一尽力重启实际捕获的标准候选路径。
 
 ## [[../checksums.sha256]]
@@ -32,4 +32,4 @@
 
 ## [[../tests/test_scripts.py]]
 
-黑盒覆盖递归、国家字段、flag 保留/规范化、幂等、备份、根/深度/schema 异常与 dry-run。策略测试通过 [[../tests/Invoke-WithMockPolicy.ps1]] 隔离注册表。参见 [[diagrams]]。
+黑盒覆盖递归、国家字段、flag 保留/规范化、幂等、无备份写入、根/深度/schema 异常与 dry-run。策略测试通过 [[../tests/Invoke-WithMockPolicy.ps1]] 隔离注册表。参见 [[diagrams]]。

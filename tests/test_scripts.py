@@ -122,19 +122,15 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(value["variations_permanent_consistency_country"], ["123.45.6", "us", "keep"])
         self.assertEqual(value["unrelated"], {"value": "保留"})
 
-    def test_shell_live_core_backup_and_idempotence(self):
+    def test_shell_live_core_without_backup_and_idempotence(self):
         state = self.write_state(self.fixture())
-        original = state.read_bytes()
         first = self.run_sh("--no-restart")
         self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
         self.assert_core_result(state)
-        backups = list(self.profile.glob("Local State.backup-*"))
-        self.assertEqual(len(backups), 1)
-        self.assertEqual(backups[0].read_bytes(), original)
-        self.assertEqual(json.loads(backups[0].read_text(encoding="utf-8"))["variations_country"], "de")
+        self.assertEqual(list(self.profile.glob("Local State.backup-*")), [])
         second = self.run_sh("--no-restart")
         self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
-        self.assertEqual(len(list(self.profile.glob("Local State.backup-*"))), 1)
+        self.assertEqual(list(self.profile.glob("Local State.backup-*")), [])
 
     def test_shell_dry_run_does_not_write(self):
         state = self.write_state(self.fixture())
@@ -205,15 +201,12 @@ class ScriptTests(unittest.TestCase):
         self.assertNotIn("/etc/", log)
         self.assertTrue(state.exists())
 
-    def test_powershell_live_core_and_backup(self):
+    def test_powershell_live_core_without_backup(self):
         state = self.write_state(self.fixture())
-        original = state.read_bytes()
         result = self.run_ps("-NoRestart")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assert_core_result(state)
-        backups = list(self.profile.glob("Local State.backup-*"))
-        self.assertEqual(len(backups), 1)
-        self.assertEqual(backups[0].read_bytes(), original)
+        self.assertEqual(list(self.profile.glob("Local State.backup-*")), [])
 
     def test_powershell_dry_run_and_malformed(self):
         state = self.write_state(self.fixture())
@@ -392,7 +385,9 @@ class ScriptTests(unittest.TestCase):
         self.assertIn("if (-not $fresh.Changed)", write_loop)
         self.assertIn("Get-FileSha256 $plan.Path", write_loop)
         self.assertIn("$fresh.SourceHash", write_loop)
-        self.assertIn("[IO.File]::Replace($temp, $plan.Path, $backup)", write_loop)
+        self.assertIn("Replace-FileWithoutBackup $temp $plan.Path", write_loop)
+        self.assertIn("MoveFileEx", ps_source)
+        self.assertNotIn(".backup-", write_loop)
         self.assertNotIn("$plan.Data | ConvertTo-Json", write_loop)
         self.assertIn("function Restart-CapturedChrome", ps_source)
         self.assertIn("finally {\n    Restart-CapturedChrome", ps_source)
