@@ -4,8 +4,8 @@
 
 ## [[../run.sh]] / [[../run.ps1]]
 
-- 解析 `marble810/bring-back-gemini@main` 的提交 SHA。
-- 从不可变提交下载 `checksums.sha256` 与对应平台主脚本。
+- 内置经过发布验证的主脚本提交 SHA，不依赖 GitHub API。
+- 从该不可变提交下载 `checksums.sha256` 与对应平台主脚本。
 - 校验 SHA-256，随后显示安全菜单；有参数时原样转交主脚本。
 - 被 README 的一条命令调用；调用对应的 `bring-back-gemini.*`。
 

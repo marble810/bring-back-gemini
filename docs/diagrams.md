@@ -7,7 +7,7 @@
 ```mermaid
 flowchart LR
     U[用户执行一条命令] --> R[下载 run.sh 或 run.ps1]
-    R --> A[GitHub API 解析 main 提交 SHA]
+    R --> A[读取启动器内置的发布提交 SHA]
     A --> D[从不可变提交下载清单和主脚本]
     D --> H{SHA-256 匹配?}
     H -->|否| X[拒绝执行]

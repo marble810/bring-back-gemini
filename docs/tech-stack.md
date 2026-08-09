@@ -4,7 +4,7 @@
 
 | 范围 | 技术 | 原因 |
 |---|---|---|
-| 远程启动 | GitHub API/Raw、HTTPS、SHA-256 | 把 `main` 锁定为提交 SHA，并校验同提交中的主脚本 |
+| 远程启动 | GitHub Raw、HTTPS、SHA-256 | 使用启动器内置的发布提交 SHA，并校验同提交中的主脚本 |
 | macOS/Linux | Bash、curl + Python 3 标准库 | Shell 负责平台操作，Python 正确处理递归 JSON 与原子替换 |
 | Windows | PowerShell 5.1/7 + .NET | 原生下载、哈希、JSON、进程、注册表与文件 API |
 | 测试 | Python `unittest` | 黑盒调用脚本，fixture 全在临时目录 |

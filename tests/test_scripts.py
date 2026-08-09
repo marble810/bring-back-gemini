@@ -305,7 +305,6 @@ class ScriptTests(unittest.TestCase):
         server_root = Path(self.temp.name) / "server"
         commit_root = server_root / "raw" / sha
         commit_root.mkdir(parents=True)
-        (server_root / "api.json").write_text(json.dumps({"sha": sha}), encoding="utf-8")
         for source in (CHECKSUMS, SH, PS):
             shutil.copy2(source, commit_root / source.name)
 
@@ -330,7 +329,7 @@ class ScriptTests(unittest.TestCase):
                 bootstrap_tmp = Path(self.temp.name) / "bootstrap-tmp"
                 bootstrap_tmp.mkdir()
                 env.update({
-                    "BBG_API_URL": base + "/api.json",
+                    "BBG_PAYLOAD_COMMIT": sha,
                     "BBG_RAW_ROOT": base + "/raw",
                     "TMPDIR": self.bash_path(bootstrap_tmp),
                 })
@@ -349,7 +348,7 @@ class ScriptTests(unittest.TestCase):
 
             ps_env = os.environ.copy()
             ps_env.update({
-                "BBG_API_URL": base + "/api.json",
+                "BBG_PAYLOAD_COMMIT": sha,
                 "BBG_RAW_ROOT": base + "/raw",
                 "BBG_RUN_PS": str(RUN_PS),
                 "BBG_TEST_PROFILE": str(self.profile),
@@ -364,17 +363,20 @@ class ScriptTests(unittest.TestCase):
             self.assertEqual((self.profile / "Local State").read_bytes(), original)
 
             # Canonical full commit IDs are mandatory; abbreviated IDs must be rejected.
-            (server_root / "api.json").write_text(json.dumps({"sha": "a"}), encoding="utf-8")
             if bash:
+                bad_shell_env = env.copy()
+                bad_shell_env["BBG_PAYLOAD_COMMIT"] = "a"
                 bad_shell = subprocess.run(
-                    shell_command, text=True, capture_output=True, env=env, timeout=30,
+                    shell_command, text=True, capture_output=True, env=bad_shell_env, timeout=30,
                 )
                 self.assertNotEqual(bad_shell.returncode, 0)
                 self.assertIn("40", bad_shell.stdout + bad_shell.stderr)
+            bad_ps_env = ps_env.copy()
+            bad_ps_env["BBG_PAYLOAD_COMMIT"] = "a"
             bad_ps = subprocess.run(
                 [self.powershell_exe(), "-NoLogo", "-NoProfile", "-Command",
                  '& $env:BBG_RUN_PS -ForwardArguments @("-UserDataDir",$env:BBG_TEST_PROFILE,"-DryRun")'],
-                text=True, capture_output=True, env=ps_env, timeout=30,
+                text=True, capture_output=True, env=bad_ps_env, timeout=30,
             )
             self.assertNotEqual(bad_ps.returncode, 0)
             self.assertIn("40", bad_ps.stdout + bad_ps.stderr)

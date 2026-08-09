@@ -3,8 +3,7 @@
 set -u
 
 REPO=${BBG_REPO:-marble810/bring-back-gemini}
-REF=${BBG_REF:-main}
-API_URL=${BBG_API_URL:-https://api.github.com/repos/$REPO/commits/$REF}
+PAYLOAD_COMMIT=${BBG_PAYLOAD_COMMIT:-9cf16a201131aac85150847496fa7cf3d34235f1}
 RAW_ROOT=${BBG_RAW_ROOT:-https://raw.githubusercontent.com/$REPO}
 
 die() { printf '错误: %s\n' "$*" >&2; exit 1; }
@@ -22,16 +21,10 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 trap 'exit 129' HUP
 
-case "$REF" in
-  ''|/*|*/|*[!A-Za-z0-9._/-]*) die "BBG_REF 包含不支持的字符: $REF" ;;
-esac
+[[ "$PAYLOAD_COMMIT" =~ ^[0-9A-Fa-f]{40}$ ]] || die "BBG_PAYLOAD_COMMIT 必须是 40 位十六进制值"
 
-printf '正在解析 %s@%s ...\n' "$REPO" "$REF"
-commit_json=$(curl -fsSL --connect-timeout 15 --max-time 60 -H 'Accept: application/vnd.github+json' -H 'User-Agent: bring-back-gemini-bootstrap' "$API_URL") || die "无法解析 GitHub 提交"
-commit_sha=$(printf '%s' "$commit_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])' 2>/dev/null) || die "提交响应无效"
-[[ "$commit_sha" =~ ^[0-9A-Fa-f]{40}$ ]] || die "提交 SHA 必须是 40 位十六进制值"
-
-base="$RAW_ROOT/$commit_sha"
+printf '正在下载 %s@%s ...\n' "$REPO" "$PAYLOAD_COMMIT"
+base="$RAW_ROOT/$PAYLOAD_COMMIT"
 manifest="$tmp_dir/checksums.sha256"
 payload="$tmp_dir/bring-back-gemini.sh"
 curl -fsSL --connect-timeout 15 --max-time 60 "$base/checksums.sha256" -o "$manifest" || die "无法下载校验清单"
@@ -47,7 +40,7 @@ PY
 ) || die "无法计算脚本哈希"
 [[ "$actual" == "$expected" ]] || die "主脚本 SHA-256 校验失败"
 chmod 700 "$payload"
-printf '已验证提交 %s，SHA-256 匹配。\n' "$commit_sha"
+printf '已验证提交 %s，SHA-256 匹配。\n' "$PAYLOAD_COMMIT"
 
 run_payload() {
   bash "$payload" "$@"

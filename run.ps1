@@ -7,27 +7,22 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = if ($env:BBG_REPO) { $env:BBG_REPO } else { 'marble810/bring-back-gemini' }
-$ref = if ($env:BBG_REF) { $env:BBG_REF } else { 'main' }
-$apiUrl = if ($env:BBG_API_URL) { $env:BBG_API_URL } else { "https://api.github.com/repos/$repo/commits/$ref" }
+$payloadCommit = if ($env:BBG_PAYLOAD_COMMIT) { $env:BBG_PAYLOAD_COMMIT } else { '9cf16a201131aac85150847496fa7cf3d34235f1' }
 $rawRoot = if ($env:BBG_RAW_ROOT) { $env:BBG_RAW_ROOT.TrimEnd('/') } else { "https://raw.githubusercontent.com/$repo" }
 
 if ($repo -notmatch '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$') {
     throw "BBG_REPO 格式无效: $repo"
 }
-if ($ref -notmatch '^[A-Za-z0-9._/-]+$' -or $ref.StartsWith('/') -or $ref.EndsWith('/')) {
-    throw "BBG_REF 包含不支持的字符: $ref"
+if ($payloadCommit -notmatch '^[0-9A-Fa-f]{40}$') {
+    throw 'BBG_PAYLOAD_COMMIT 必须是 40 位十六进制值'
 }
 
 $tempDir = Join-Path ([IO.Path]::GetTempPath()) ('bring-back-gemini-run-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($tempDir) | Out-Null
 try {
-    Write-Host "正在解析 $repo@$ref ..."
-    $headers = @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'bring-back-gemini-bootstrap' }
-    $commit = Invoke-RestMethod -Uri $apiUrl -Headers $headers -UseBasicParsing
-    $commitSha = [string]$commit.sha
-    if ($commitSha -notmatch '^[0-9A-Fa-f]{40}$') { throw '提交 SHA 必须是 40 位十六进制值' }
-
-    $base = "$rawRoot/$commitSha"
+    Write-Host "正在下载 $repo@$payloadCommit ..."
+    $headers = @{ 'User-Agent' = 'bring-back-gemini-bootstrap' }
+    $base = "$rawRoot/$payloadCommit"
     $manifestPath = Join-Path $tempDir 'checksums.sha256'
     $payloadPath = Join-Path $tempDir 'bring-back-gemini.ps1'
     Invoke-WebRequest -Uri "$base/checksums.sha256" -Headers $headers -UseBasicParsing -OutFile $manifestPath
@@ -43,7 +38,7 @@ try {
     if (-not $expected) { throw '校验清单缺少有效的 bring-back-gemini.ps1 哈希' }
     $actual = (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -cne $expected) { throw '主脚本 SHA-256 校验失败' }
-    Write-Host "已验证提交 $commitSha，SHA-256 匹配。"
+    Write-Host "已验证提交 $payloadCommit，SHA-256 匹配。"
 
     $payloadArguments = @()
     if ($ForwardArguments -and $ForwardArguments.Count -gt 0) {

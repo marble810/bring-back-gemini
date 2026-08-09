@@ -6,7 +6,7 @@
 
 ## 一条命令运行
 
-与 MAS 的启动方式类似，下面的命令只负责从本仓库下载启动器；启动器会先把 `main` 解析为不可变提交 SHA，再下载主脚本并核对 `checksums.sha256`，随后显示操作菜单。默认菜单项是无副作用的 Dry-run。
+与 MAS 的启动方式类似，下面的命令只负责从本仓库下载启动器；启动器内置经过发布验证的不可变主脚本提交 SHA，从该提交下载主脚本并核对 `checksums.sha256`，随后显示操作菜单。默认菜单项是无副作用的 Dry-run。
 
 ### Windows
 
@@ -22,7 +22,7 @@ irm https://raw.githubusercontent.com/marble810/bring-back-gemini/main/run.ps1 |
 curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/main/run.sh | bash
 ```
 
-执行前请核对域名和仓库名。远程执行始终以 HTTPS 下载到的启动器为信任起点；SHA-256 校验用于确认后续主脚本与同一不可变提交中的清单一致，不能替代对启动器本身和仓库权限的信任。启动器通过未认证 GitHub API 解析 `main`，在共享网络出口触发 API 速率限制时会安全失败，可稍后重试或改为本地下载运行。
+执行前请核对域名和仓库名。远程执行始终以 HTTPS 下载到的启动器为信任起点；SHA-256 校验用于确认后续主脚本与同一不可变提交中的清单一致，不能替代对启动器本身和仓库权限的信任。启动器不依赖 GitHub API，因此不会消耗未认证 API 配额；发布新主脚本时需要同步更新启动器内置的提交 SHA。
 
 参数也可以直接透传：
 
