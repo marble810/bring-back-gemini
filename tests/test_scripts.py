@@ -3,6 +3,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -350,6 +351,32 @@ class ScriptTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join(timeout=5)
+
+    def test_launcher_default_pins_exist_in_repo(self):
+        # tests 用环境变量覆盖 pin，测不到启动器默认值；这里直接验证默认 pin
+        # 是仓库内真实提交且包含两个 payload 文件，防止手写 SHA 笔误再次上线。
+        if not shutil.which("git"):
+            self.skipTest("git is unavailable")
+        sh_pin = re.search(r"PAYLOAD_COMMIT=\$\{BBG_PAYLOAD_COMMIT:-([0-9a-fA-F]{40})\}",
+                           RUN_SH.read_text(encoding="utf-8"))
+        ps_pin = re.search(r"BBG_PAYLOAD_COMMIT\s*}\s*else\s*\{\s*'([0-9a-fA-F]{40})'\s*\}",
+                           RUN_PS.read_text(encoding="utf-8"))
+        self.assertIsNotNone(sh_pin, "run.sh 必须内置 40 位 BBG_PAYLOAD_COMMIT 默认值")
+        self.assertIsNotNone(ps_pin, "run.ps1 必须内置 40 位 BBG_PAYLOAD_COMMIT 默认值")
+        pins = (sh_pin.group(1), ps_pin.group(1))
+        self.assertEqual(pins[0], pins[1], "两个启动器的默认 pin 必须一致")
+        for pin in pins:
+            commit = subprocess.run(
+                ["git", "rev-parse", "--verify", pin + "^{commit}"],
+                cwd=ROOT, text=True, capture_output=True)
+            self.assertEqual(commit.returncode, 0,
+                             f"启动器默认 pin {pin} 不是仓库内真实提交（疑似手写笔误）")
+            for payload in ("bring-back-gemini.sh", "bring-back-gemini.ps1"):
+                exists = subprocess.run(
+                    ["git", "cat-file", "-e", f"{pin}:{payload}"],
+                    cwd=ROOT, text=True, capture_output=True)
+                self.assertEqual(exists.returncode, 0,
+                                 f"启动器默认 pin {pin} 对应提交缺少 {payload}")
 
     def test_concurrency_guards_and_stale_plan_seams_exist(self):
         ps_source = PS.read_text(encoding="utf-8")
