@@ -3,7 +3,7 @@
 set -u
 
 REPO=${BBG_REPO:-marble810/bring-back-gemini}
-PAYLOAD_COMMIT=${BBG_PAYLOAD_COMMIT:-891bf25722913d29690f6691f940f235d5bfec2e}
+PAYLOAD_COMMIT=${BBG_PAYLOAD_COMMIT:-841e2e38e69f868fd5aad415da8f2071afe89f34}
 RAW_ROOT=${BBG_RAW_ROOT:-https://raw.githubusercontent.com/$REPO}
 
 die() { printf '错误: %s\n' "$*" >&2; exit 1; }
