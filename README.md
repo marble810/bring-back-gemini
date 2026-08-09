@@ -75,7 +75,7 @@ chmod +x bring-back-gemini.sh
 6. 始终把 `browser.enabled_labs_experiments` 规范化为包含 `glic@1`（即 `chrome://flags/#glic → Enabled` 的持久化等价物）：移除任何 `glic`、`glic@0`、`glic@1`、`glic@2` 旧值后加入 `glic@1`，其余 flag（含非字符串项）原样保留。
 7. 使用同目录临时文件原子替换 `Local State`，尽量保留文件权限与无关 JSON；按要求不创建备份。
 
-Dry-run 绝不停止、写入、提权或重启。自定义目录适合测试。正常频道仅按内置的规范完整可执行路径匹配进程，先请求正常退出并限时等待，超时才警告并强制停止；不会按裸进程名任意杀进程。Windows 会匹配每个频道在 Program Files、Program Files (x86) 和用户目录中的全部标准候选路径，并只重启实际捕获的路径。非标准安装位置、符号链接或包装器路径仍可能无法匹配，此时必须先手动关闭 Chrome。PowerShell 对 JSON 采用明确的保守嵌套上限 **80 层**（输出仍使用 `ConvertTo-Json -Depth 100`），超过上限会在停止或写入前拒绝。
+Dry-run 绝不停止、写入、提权或重启。自定义目录适合测试。正常频道仅按内置的规范完整可执行路径匹配进程；匹配到 Chrome 在运行时，脚本会**先询问是否关闭**（回答 `n`/`no` 则取消，不停止、不写入；非交互环境自动继续），然后请求正常退出并限时等待，超时才警告并强制停止；不会按裸进程名任意杀进程。Windows 会匹配每个频道在 Program Files、Program Files (x86) 和用户目录中的全部标准候选路径，并只重启实际捕获的路径。非标准安装位置、符号链接或包装器路径仍可能无法匹配，此时必须先手动关闭 Chrome。PowerShell 对 JSON 采用明确的保守嵌套上限 **80 层**（输出仍使用 `ConvertTo-Json -Depth 100`），超过上限会在停止或写入前拒绝。
 
 ### 可选：禁用本地 AI 下载
 

@@ -384,6 +384,18 @@ if ($changedPlans.Count -gt 0) {
             exit 1
         }
         if ($chromeProcesses.Count -gt 0) {
+            # 先征得同意再关闭 Chrome：避免丢失用户未保存的工作。
+            # 非交互环境（stdin 不可读）默认继续，保持原有自动关闭行为。
+            $proceed = $true
+            try {
+                Write-Host '检测到 Chrome 正在运行；继续修改前需要先关闭 Chrome。'
+                $answer = Read-Host '是否关闭 Chrome 并继续？[Y/n]'
+                if ($answer -match '^(n|no)$') { $proceed = $false }
+            } catch { }
+            if (-not $proceed) {
+                Write-Host '已取消：未停止 Chrome，未修改任何文件。'
+                exit 1
+            }
             foreach ($process in $chromeProcesses) {
                 $captured = $false
                 foreach ($recorded in $restartExecutables) {

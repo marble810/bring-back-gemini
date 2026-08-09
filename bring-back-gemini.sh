@@ -221,6 +221,7 @@ fi
 
 STOPPED_EXES=()
 RESTART_DONE=0
+ASKED_STOP=0
 restart_stopped() {
   local exe failed=0
   if ((NO_RESTART)); then RESTART_DONE=1; return 0; fi
@@ -266,6 +267,20 @@ stop_selected() {
       return 1
     fi
     [[ -n "$pids" ]] || continue
+    # 先征得同意再关闭 Chrome：避免丢失用户未保存的工作。
+    # 非交互环境（stdin 不可读）默认继续，保持原有自动关闭行为。
+    if ((ASKED_STOP == 0)); then
+      ASKED_STOP=1
+      printf '检测到 Chrome 正在运行；继续修改前需要先关闭 Chrome。\n'
+      printf '是否关闭 Chrome 并继续？[Y/n] '
+      local answer
+      IFS= read -r answer
+      case "$answer" in
+        n|N|no|NO|No)
+          echo '已取消：未停止 Chrome，未修改任何文件。' >&2
+          exit 1 ;;
+      esac
+    fi
     printf '[%s] 正在请求 Chrome 正常退出...\n' "${LABELS[$idx]}"
     kill -TERM $pids 2>/dev/null || true
     waited=0
