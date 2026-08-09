@@ -28,4 +28,4 @@
 
 ## [[../tests/test_scripts.py]]
 
-黑盒覆盖递归、国家字段、flag 保留/规范化、幂等、无备份写入、根/schema 异常与 dry-run。策略测试通过 [[../tests/Invoke-WithMockPolicy.ps1]] 隔离注册表。参见 [[diagrams]]。
+黑盒覆盖递归、国家字段、flag 保留/规范化、幂等、无备份写入、根/schema 异常与现状检查。策略测试通过 [[../tests/Invoke-WithMockPolicy.ps1]] 隔离注册表。参见 [[diagrams]]。

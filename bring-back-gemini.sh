@@ -3,7 +3,7 @@
 set -u
 
 PROGRAM=${0##*/}
-DRY_RUN=0
+CHECK=0
 NO_RESTART=0
 DISABLE_AI_DOWNLOAD=0
 CUSTOM_DIR=""
@@ -19,7 +19,7 @@ usage() {
 选项:
   --channel NAME          选择 stable、beta、dev 或 canary；可重复或逗号分隔（默认: all）
   --user-data-dir PATH    只处理指定的用户数据目录（便于安全测试）
-  --dry-run               仅检查并显示计划；不停止、写入、提权或重启 Chrome
+  --check                 现状检查：只查看当前配置并展示将要做的修改，不修改、不关闭、不重启 Chrome
   --no-restart            修改后不重启先前运行的 Chrome
   --disable-ai-download   额外禁用两个本地 AI 模型 flag，并安装
                           GenAILocalFoundationalModelSettings=1 策略；会显示
@@ -42,7 +42,7 @@ while (($#)); do
     --user-data-dir)
       (($# >= 2)) || die_usage "--user-data-dir 需要参数"
       CUSTOM_DIR=$2; shift 2 ;;
-    --dry-run) DRY_RUN=1; shift ;;
+    --check) CHECK=1; shift ;;
     --no-restart) NO_RESTART=1; shift ;;
     --disable-ai-download) DISABLE_AI_DOWNLOAD=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -201,9 +201,9 @@ if ((validation_failed)); then echo "错误: 至少一个 Local State 验证失�
 if ((DISABLE_AI_DOWNLOAD)); then
   echo "警告: 禁用 AI 下载会安装 Chrome 策略，并可能显示“由您的组织管理”。"
 fi
-if ((DRY_RUN)); then
-  ((DISABLE_AI_DOWNLOAD)) && echo "[dry-run] 将设置 GenAILocalFoundationalModelSettings=1；不会提权或写入。"
-  echo "[dry-run] 未停止、写入或重启 Chrome。"
+if ((CHECK)); then
+  ((DISABLE_AI_DOWNLOAD)) && echo "[现状检查] 将查看本地 AI 下载策略设置；本次不会写入。"
+  echo "[现状检查] 本次只查看，不会修改文件、关闭或重启 Chrome。"
   exit 0
 fi
 

@@ -133,14 +133,14 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
         self.assertEqual(list(self.profile.glob("Local State.backup-*")), [])
 
-    def test_shell_dry_run_does_not_write(self):
+    def test_shell_check_does_not_write(self):
         state = self.write_state(self.fixture())
         original = state.read_bytes()
-        result = self.run_sh("--dry-run", "--disable-ai-download")
+        result = self.run_sh("--check", "--disable-ai-download")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(state.read_bytes(), original)
         self.assertEqual(list(self.profile.glob("*.backup-*")), [])
-        self.assertIn("dry-run", result.stdout)
+        self.assertIn("现状检查", result.stdout)
 
     def test_shell_flag_normalization_and_preservation(self):
         state = self.write_state({
@@ -168,7 +168,7 @@ class ScriptTests(unittest.TestCase):
         state = self.profile / "Local State"
         for raw in ('{"broken":', '[]', '{"browser":42}', '{"value":NaN}'):
             state.write_text(raw, encoding="utf-8")
-            result = self.run_sh("--dry-run")
+            result = self.run_sh("--check")
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertEqual(state.read_text(encoding="utf-8"), raw)
             self.assertEqual(list(self.profile.glob("*.backup-*")), [])
@@ -176,7 +176,7 @@ class ScriptTests(unittest.TestCase):
     def test_shell_empty_channel_is_usage_error(self):
         state = self.write_state(self.fixture())
         original = state.read_bytes()
-        result = self.run_sh("--channel", "", "--dry-run")
+        result = self.run_sh("--channel", "", "--check")
         self.assertEqual(result.returncode, 64, result.stdout + result.stderr)
         self.assertEqual(state.read_bytes(), original)
 
@@ -211,16 +211,16 @@ class ScriptTests(unittest.TestCase):
         self.assert_core_result(state)
         self.assertEqual(list(self.profile.glob("Local State.backup-*")), [])
 
-    def test_powershell_dry_run_and_malformed(self):
+    def test_powershell_check_and_malformed(self):
         state = self.write_state(self.fixture())
         original = state.read_bytes()
-        result = self.run_ps("-DryRun", "-DisableAIDownload")
+        result = self.run_ps("-Check", "-DisableAIDownload")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(state.read_bytes(), original)
         for unsafe in ('{"broken":', '[]', '[{"is_glic_eligible":false}]',
                        '42', 'true', 'null', '"scalar"', '{"browser":42}'):
             state.write_text(unsafe, encoding="utf-8")
-            malformed = self.run_ps("-DryRun")
+            malformed = self.run_ps("-Check")
             self.assertEqual(malformed.returncode, 1, malformed.stdout + malformed.stderr)
             self.assertEqual(state.read_text(encoding="utf-8"), unsafe)
             self.assertEqual(list(self.profile.glob("*.backup-*")), [])
@@ -303,7 +303,7 @@ class ScriptTests(unittest.TestCase):
                 shell_command = [
                     bash, "-c", 'PATH="$1:$PATH"; shift; exec bash "$@"',
                     "test-wrapper", bindir, self.bash_path(RUN_SH),
-                    "--user-data-dir", self.bash_path(self.profile), "--dry-run",
+                    "--user-data-dir", self.bash_path(self.profile), "--check",
                 ]
                 shell_result = subprocess.run(
                     shell_command, text=True, capture_output=True, env=env, timeout=30,
@@ -321,7 +321,7 @@ class ScriptTests(unittest.TestCase):
             })
             ps_result = subprocess.run(
                 [self.powershell_exe(), "-NoLogo", "-NoProfile", "-Command",
-                 '& $env:BBG_RUN_PS -ForwardArguments @("-UserDataDir",$env:BBG_TEST_PROFILE,"-DryRun")'],
+                 '& $env:BBG_RUN_PS -ForwardArguments @("-UserDataDir",$env:BBG_TEST_PROFILE,"-Check")'],
                 text=True, capture_output=True, env=ps_env, timeout=30,
             )
             self.assertEqual(ps_result.returncode, 0, ps_result.stdout + ps_result.stderr)
@@ -341,7 +341,7 @@ class ScriptTests(unittest.TestCase):
             bad_ps_env["BBG_PAYLOAD_COMMIT"] = "a"
             bad_ps = subprocess.run(
                 [self.powershell_exe(), "-NoLogo", "-NoProfile", "-Command",
-                 '& $env:BBG_RUN_PS -ForwardArguments @("-UserDataDir",$env:BBG_TEST_PROFILE,"-DryRun")'],
+                 '& $env:BBG_RUN_PS -ForwardArguments @("-UserDataDir",$env:BBG_TEST_PROFILE,"-Check")'],
                 text=True, capture_output=True, env=bad_ps_env, timeout=30,
             )
             self.assertNotEqual(bad_ps.returncode, 0)

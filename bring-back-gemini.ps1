@@ -3,7 +3,7 @@
 param(
     [string[]]$Channel = @('all'),
     [string]$UserDataDir,
-    [switch]$DryRun,
+    [switch]$Check,
     [switch]$NoRestart,
     [switch]$DisableAIDownload,
     [ValidateSet('Auto', 'User', 'Machine')]
@@ -54,7 +54,7 @@ function Show-Help {
 选项:
   -Channel stable,beta,...  stable、beta、dev、canary 或 all（默认 all）
   -UserDataDir PATH         只处理指定用户数据目录（便于安全测试）
-  -DryRun                   仅检查并显示计划；不停止、写入、提权或重启
+  -Check                   现状检查：只查看当前配置并展示将要做的修改，不修改、不关闭、不重启
   -NoRestart                修改后不重启先前运行的 Chrome
   -DisableAIDownload        禁用两个本地 AI 模型 flag 并设置策略（默认关闭）
   -PolicyScope Auto|User|Machine
@@ -272,9 +272,9 @@ if ($validationFailed) {
 }
 
 if ($DisableAIDownload) { Write-Warning '禁用 AI 下载会安装 Chrome 策略，并可能显示“由您的组织管理”。' }
-if ($DryRun) {
-    if ($DisableAIDownload) { Write-Host '[dry-run] 将设置 GenAILocalFoundationalModelSettings=1；不会写注册表。' }
-    Write-Host '[dry-run] 未停止、写入或重启 Chrome。'
+if ($Check) {
+    if ($DisableAIDownload) { Write-Host '[现状检查] 将查看本地 AI 下载策略设置；本次不会写入。' }
+    Write-Host '[现状检查] 本次只查看，不会修改文件、关闭或重启 Chrome。'
     exit 0
 }
 

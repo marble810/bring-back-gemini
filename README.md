@@ -63,15 +63,15 @@ curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/he
 >
 > Ask Gemini 能否出现还取决于 Chrome 版本、登录的 Google 账号、服务端灰度、语言/地区以及企业策略。脚本只修改明确列出的本地字段——不碰概率、不碰服务端、不碰 Google 账号资格。
 >
-> **先 Dry-run，看清它要动什么，再决定放手。**
+> **先做现状检查，看清当前配置和将要做的修改，再决定是否应用。**
 
 ## 使用
 
 ### 一条命令运行
 
-> 不想读文档？直接跑下面这条。默认进菜单、默认项是 Dry-run，零副作用。
+> 不想读文档？直接跑下面这条。默认先做现状检查（只查看，不修改任何文件），确认后才应用。
 
-下面的命令只负责从本仓库下载启动器；启动器内置经过发布验证的不可变主脚本提交 SHA，从该提交下载主脚本，随后显示操作菜单。默认菜单项是无副作用的 Dry-run。
+下面的命令只负责从本仓库下载启动器；启动器内置经过发布验证的不可变主脚本提交 SHA，从该提交下载主脚本，随后先做现状检查（不修改任何文件），再确认是否应用。
 
 #### Windows
 
@@ -92,16 +92,16 @@ curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/he
 参数也可以直接透传：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/heads/main/run.ps1))) -ForwardArguments @('-DryRun')
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/heads/main/run.ps1))) -ForwardArguments @('-Check')
 ```
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/heads/main/run.sh | bash -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/heads/main/run.sh | bash -s -- --check
 ```
 
 ### 本地运行
 
-先完全保存工作；脚本仅在确有配置变化时才会尝试关闭对应 Chrome，并在之后重启（可禁用重启）。建议先 dry-run。
+先完全保存工作；脚本仅在确有配置变化时才会尝试关闭对应 Chrome，并在之后重启（可禁用重启）。建议先做现状检查。
 
 #### macOS / Linux
 
@@ -109,10 +109,10 @@ curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/he
 
 ```bash
 chmod +x bring-back-gemini.sh
-./bring-back-gemini.sh --dry-run
+./bring-back-gemini.sh --check
 ./bring-back-gemini.sh --channel stable
 ./bring-back-gemini.sh --channel beta,dev --no-restart
-./bring-back-gemini.sh --user-data-dir /tmp/chrome-fixture --dry-run
+./bring-back-gemini.sh --user-data-dir /tmp/chrome-fixture --check
 ```
 
 #### Windows
@@ -120,17 +120,15 @@ chmod +x bring-back-gemini.sh
 支持 Windows PowerShell 5.1 与 PowerShell 7：
 
 ```powershell
-.\bring-back-gemini.ps1 -DryRun
+.\bring-back-gemini.ps1 -Check
 .\bring-back-gemini.ps1 -Channel stable
 .\bring-back-gemini.ps1 -Channel beta,dev -NoRestart
-.\bring-back-gemini.ps1 -UserDataDir C:\Temp\chrome-fixture -DryRun
+.\bring-back-gemini.ps1 -UserDataDir C:\Temp\chrome-fixture -Check
 ```
 
-默认检测 Stable、Beta、Dev、Canary；`--channel` / `-Channel` 可缩小范围。自定义目录只处理该目录，不匹配或停止任何 Chrome 可执行文件；**对自定义目录执行非 dry-run 前，必须自行确认使用它的 Chrome 已完全关闭**。完整参数见 `--help` / `-Help`。
+默认检测 Stable、Beta、Dev、Canary；`--channel` / `-Channel` 可缩小范围。自定义目录只处理该目录，不匹配或停止任何 Chrome 可执行文件；**对自定义目录执行正式修改前，必须自行确认使用它的 Chrome 已完全关闭**。完整参数见 `--help` / `-Help`。
 
 ### 脚本做什么
-
-> 没黑箱。它只动这些字段，不多碰一个。
 
 对每个存在的 `Local State`：
 
@@ -142,7 +140,7 @@ chmod +x bring-back-gemini.sh
 6. 始终把 `browser.enabled_labs_experiments` 规范化为包含 `glic@1`（即 `chrome://flags/#glic → Enabled` 的持久化等价物）：移除任何 `glic`、`glic@0`、`glic@1`、`glic@2` 旧值后加入 `glic@1`，其余 flag（含非字符串项）原样保留。
 7. 使用同目录临时文件原子替换 `Local State`，尽量保留文件权限与无关 JSON；按要求不创建备份。
 
-Dry-run 绝不停止、写入、提权或重启。自定义目录适合测试。正常频道仅按内置的规范完整可执行路径匹配进程；匹配到 Chrome 在运行时，脚本会**先询问是否关闭**（回答 `n`/`no` 则取消，不停止、不写入；非交互环境自动继续），然后请求正常退出并限时等待，超时才警告并强制停止；不会按裸进程名任意杀进程。Windows 会匹配每个频道在 Program Files、Program Files (x86) 和用户目录中的全部标准候选路径，并只重启实际捕获的路径。非标准安装位置、符号链接或包装器路径仍可能无法匹配，此时必须先手动关闭 Chrome。
+现状检查绝不停止、写入、提权或重启。自定义目录适合测试。正常频道仅按内置的规范完整可执行路径匹配进程；匹配到 Chrome 在运行时，脚本会**先询问是否关闭**（回答 `n`/`no` 则取消，不停止、不写入；非交互环境自动继续），然后请求正常退出并限时等待，超时才警告并强制停止；不会按裸进程名任意杀进程。Windows 会匹配每个频道在 Program Files、Program Files (x86) 和用户目录中的全部标准候选路径，并只重启实际捕获的路径。非标准安装位置、符号链接或包装器路径仍可能无法匹配，此时必须先手动关闭 Chrome。
 
 ### 可选：禁用本地 AI 下载
 
@@ -167,10 +165,10 @@ Dry-run 绝不停止、写入、提权或重启。自定义目录适合测试。
 ### 安全与限制
 
 > [!WARNING]
-> **脚本不创建备份。** 真正写入后无法用它还原原文件——先 Dry-run，运行前自行复制一份 Chrome 用户数据目录最保险。
+> **脚本不创建备份。** 真正写入后无法用它还原原文件——先做现状检查，运行前自行复制一份 Chrome 用户数据目录最保险。
 
 - Chrome 运行时可能覆盖 `Local State`，因此脚本只在计划变更时处理选中频道进程。
-- **脚本不创建备份。** 实际写入后无法通过本工具自动恢复原文件；请优先运行 Dry-run，并自行决定是否在运行前复制整个 Chrome 用户数据目录。
+- **脚本不创建备份。** 实际写入后无法通过本工具自动恢复原文件；请优先运行现状检查，并自行决定是否在运行前复制整个 Chrome 用户数据目录。
 - 写入前会再次比较源文件字节，发现并发变化就删除本次临时产物并拒绝覆盖。检查与原子替换之间仍有极小的无锁竞态窗口，因此不是严格 CAS。
 - JSON 根不是对象、`browser` 类型异常、或模型 flag 列表类型异常时拒绝写入，避免破坏未知结构。
 - 修改 Chrome 内部状态并非 Google 支持的公开配置接口；Chrome 升级可能改变或忽略这些字段。
