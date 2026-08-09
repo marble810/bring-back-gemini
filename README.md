@@ -11,7 +11,7 @@
 ### Windows
 
 ```powershell
-irm https://raw.githubusercontent.com/marble810/bring-back-gemini/main/run.ps1 | iex
+irm https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/heads/main/run.ps1 | iex
 ```
 
 ### macOS / Linux
@@ -19,7 +19,7 @@ irm https://raw.githubusercontent.com/marble810/bring-back-gemini/main/run.ps1 |
 需要 `curl` 与 `python3`（部分全新 macOS 需要先安装 Python 3）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/main/run.sh | bash
+curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/heads/main/run.sh | bash
 ```
 
 执行前请核对域名和仓库名。远程执行始终以 HTTPS 下载到的启动器为信任起点；SHA-256 校验用于确认后续主脚本与同一不可变提交中的清单一致，不能替代对启动器本身和仓库权限的信任。启动器不依赖 GitHub API，因此不会消耗未认证 API 配额；发布新主脚本时需要同步更新启动器内置的提交 SHA。
@@ -27,11 +27,11 @@ curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/main/ru
 参数也可以直接透传：
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/marble810/bring-back-gemini/main/run.ps1))) -ForwardArguments @('-DryRun')
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/heads/main/run.ps1))) -ForwardArguments @('-DryRun')
 ```
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/main/run.sh | bash -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/heads/main/run.sh | bash -s -- --dry-run
 ```
 
 ## 本地运行
