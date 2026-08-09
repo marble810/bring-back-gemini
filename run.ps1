@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = if ($env:BBG_REPO) { $env:BBG_REPO } else { 'marble810/bring-back-gemini' }
-$payloadCommit = if ($env:BBG_PAYLOAD_COMMIT) { $env:BBG_PAYLOAD_COMMIT } else { '841e2e38e69f868fd5aad415da8f2071afe89f34' }
+$payloadCommit = if ($env:BBG_PAYLOAD_COMMIT) { $env:BBG_PAYLOAD_COMMIT } else { 'ca624fd0e2df6e6cb2d44b53b4fca1e51b1f8b73' }
 $rawRoot = if ($env:BBG_RAW_ROOT) { $env:BBG_RAW_ROOT.TrimEnd('/') } else { "https://raw.githubusercontent.com/$repo" }
 
 if ($repo -notmatch '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$') {
@@ -34,11 +34,11 @@ try {
     if ($ForwardArguments -and $ForwardArguments.Count -gt 0) {
         $payloadArguments = @($ForwardArguments)
     } else {
-        # 把 dry-run 的结果直接展示在主菜单上方，不再作为独立选项。
+        # 把现状检查的结果直接展示在主菜单上方，不再作为独立选项。
         Write-Host ''
-        Write-Host '正在预览（dry-run，不修改任何文件）…'
+        Write-Host '正在检查 Chrome 现状（只查看，不修改任何文件）…'
         Write-Host ''
-        $preview = & $hostExe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $payloadPath -DryRun 2>&1
+        $preview = & $hostExe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $payloadPath -Check 2>&1
         $previewRc = $LASTEXITCODE
         if ($previewRc -ne 0) {
             # 验证失败等：原样打印预览后退出，不进入菜单、不继续修改。
@@ -89,7 +89,7 @@ try {
         }
 
         Write-Host ''
-        Write-Host '接下来怎么做？（dry-run 结果已在上方展示）'
+        Write-Host '接下来怎么做？（上方是现状检查结果：只是看了看，什么都没改）'
         Write-Host '  1) 应用到所有检测到的频道          （默认）'
         Write-Host '  2) 仅应用到 Chrome Stable'
         Write-Host '  3) 应用全部频道，并禁用本地 AI 模型下载'

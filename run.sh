@@ -3,7 +3,7 @@
 set -u
 
 REPO=${BBG_REPO:-marble810/bring-back-gemini}
-PAYLOAD_COMMIT=${BBG_PAYLOAD_COMMIT:-841e2e38e69f868fd5aad415da8f2071afe89f34}
+PAYLOAD_COMMIT=${BBG_PAYLOAD_COMMIT:-ca624fd0e2df6e6cb2d44b53b4fca1e51b1f8b73}
 RAW_ROOT=${BBG_RAW_ROOT:-https://raw.githubusercontent.com/$REPO}
 
 die() { printf '错误: %s\n' "$*" >&2; exit 1; }
@@ -49,11 +49,11 @@ if (($#)); then
   exit $?
 fi
 
-# 把 dry-run 的结果直接展示在主菜单上方，不再作为独立选项。
-# dry-run 只做 validate/打印计划，不会停止、写入、提权或重启 Chrome。
+# 把现状检查的结果直接展示在主菜单上方，不再作为独立选项。
+# 现状检查只做 validate/打印计划，不会停止、写入、提权或重启 Chrome。
 preview_file="$tmp_dir/preview.txt"
-printf '正在预览（dry-run，不修改任何文件）…\n\n'
-bash "$payload" --dry-run </dev/null >"$preview_file" 2>&1
+printf '正在检查 Chrome 现状（只查看，不修改任何文件）…\n\n'
+bash "$payload" --check </dev/null >"$preview_file" 2>&1
 preview_rc=$?
 if (( preview_rc != 0 )); then
   # 验证失败等：原样打印预览后退出，不进入菜单、不继续修改。
@@ -113,7 +113,7 @@ fi
 if (exec </dev/tty) 2>/dev/null; then
   cat >/dev/tty <<'EOF'
 
-接下来怎么做？（dry-run 结果已在上方展示）
+接下来怎么做？（上方是现状检查结果：只是看了看，什么都没改）
   1) 应用到所有检测到的频道          （默认）
   2) 仅应用到 Chrome Stable
   3) 应用全部频道，并禁用本地 AI 模型下载
