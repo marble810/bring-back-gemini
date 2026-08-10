@@ -23,6 +23,34 @@ trap 'exit 129' HUP
 
 [[ "$PAYLOAD_COMMIT" =~ ^[0-9A-Fa-f]{40}$ ]] || die "BBG_PAYLOAD_COMMIT 必须是 40 位十六进制值"
 
+# ASCII 标题（rainbow2 配色），仅交互终端展示。
+print_banner_art() {
+  # 彩虹2：每行按 2 字符分块、10 色循环、行间错位（与 patorjk.com rainbow2 一致）。
+  local pal=( '255;80;80' '255;160;0' '255;255;0' '150;255;0' '0;255;0' '0;255;180' '0;255;255' '80;160;255' '160;80;255' '255;0;255' )
+  local l=0 d off chunk c
+  while IFS= read -r line; do
+    d=$((l/2)); off=$((l%2))
+    if (( off == 0 )); then
+      printf '\033[38;2;%sm%s\033[0m' "${pal[$((d%10))]}" "${line:0:1}"
+      c=1; chunk=1
+    else
+      c=0; chunk=0
+    fi
+    while (( c < ${#line} )); do
+      printf '\033[38;2;%sm%s\033[0m' "${pal[$(((d+off+chunk)%10))]}" "${line:c:2}"
+      chunk=$((chunk+1)); c=$((c+2))
+    done
+    printf '\n'
+    l=$((l+1))
+  done <<'ART'
+▛▀▖▛▀▖▜▘▙ ▌▞▀▖   ▛▀▖▞▀▖▞▀▖▌ ▌  ▞▀▖▛▀▘▙▗▌▜▘▙ ▌▜▘     ▌
+▙▄▘▙▄▘▐ ▌▌▌▌▄▖▄▄▖▙▄▘▙▄▌▌  ▙▞▄▄▖▌▄▖▙▄ ▌▘▌▐ ▌▌▌▐   ▞▀▘▛▀▖
+▌ ▌▌▚ ▐ ▌▝▌▌ ▌   ▌ ▌▌ ▌▌ ▖▌▝▖  ▌ ▌▌  ▌ ▌▐ ▌▝▌▐ ▗▖▝▀▖▌ ▌
+▀▀ ▘ ▘▀▘▘ ▘▝▀    ▀▀ ▘ ▘▝▀ ▘ ▘  ▝▀ ▀▀▘▘ ▘▀▘▘ ▘▀▘▝▘▀▀ ▘ ▘
+ART
+}
+
+if [[ -t 1 ]]; then print_banner_art; fi
 printf '正在下载 %s@%s ...\n' "$REPO" "$PAYLOAD_COMMIT"
 base="$RAW_ROOT/$PAYLOAD_COMMIT"
 payload="$tmp_dir/bring-back-gemini.sh"
@@ -52,7 +80,18 @@ fi
 # 把现状检查的结果直接展示在主菜单上方，不再作为独立选项。
 # 现状检查只做 validate/打印计划，不会停止、写入、提权或重启 Chrome。
 preview_file="$tmp_dir/preview.txt"
-printf '正在检查 Chrome 现状（只查看，不修改任何文件）…\n\n'
+# 状态颜色（Chrome 品牌色）：仅交互终端上色。
+if [[ -t 1 ]]; then
+  C_BLUE=$'\033[38;2;66;133;244m'    # Chrome 蓝 #4285F4
+  C_GREEN=$'\033[38;2;52;168;83m'    # Chrome 绿 #34A853
+  C_YELLOW=$'\033[38;2;251;188;4m'   # Chrome 黄 #FBBC04
+  C_RED=$'\033[38;2;234;67;53m'      # Chrome 红 #EA4335
+  C_RESET=$'\033[0m'
+else
+  C_BLUE=''; C_GREEN=''; C_YELLOW=''; C_RED=''; C_RESET=''
+fi
+# 当前 Local State 状态横幅（Chrome 品牌蓝）。
+printf '%s当前 Local State 状态%s\n\n' "$C_BLUE" "$C_RESET"
 bash "$payload" --check </dev/null >"$preview_file" 2>&1
 preview_rc=$?
 if (( preview_rc != 0 )); then
@@ -102,7 +141,14 @@ for line in ${p_lines[@]+"${p_lines[@]}"}; do
   else
     continue
   fi
-  printf '  [%-6s] %s  %s\n' "$label" "$status" "$(shorten "$path")"
+  # 状态颜色：计划修改=红，无需修改=绿，跳过=黄。
+  case "$status" in
+    计划修改) color="$C_RED" ;;
+    无需修改) color="$C_GREEN" ;;
+    跳过*) color="$C_YELLOW" ;;
+    *) color='' ;;
+  esac
+  printf '  [%-6s] %s%s%s  %s\n' "$label" "$color" "$status" "$C_RESET" "$(shorten "$path")"
 done
 
 if ((has_present == 0)); then
@@ -111,14 +157,15 @@ if ((has_present == 0)); then
 fi
 
 if (exec </dev/tty) 2>/dev/null; then
-  cat >/dev/tty <<'EOF'
-
-接下来怎么做？（上方是现状检查结果：只是看了看，什么都没改）
-  1) 应用到所有检测到的频道          （默认）
-  2) 仅应用到 Chrome Stable
-  3) 应用全部频道，并禁用本地 AI 模型下载
-  0) 退出
-EOF
+  # 菜单：上下分割线 + 选项配色（Chrome 品牌色）。/dev/tty 必为交互终端；
+  # 注意 heredoc 不解释 \033，必须用 printf（其格式串会解释 \0NNN 转义）。
+  printf '\n-------------------\n' >/dev/tty
+  printf '请选择要执行的操作：\n' >/dev/tty
+  printf '  \033[38;2;52;168;83m1) 应用到所有检测到的频道          （默认）\033[0m\n' >/dev/tty
+  printf '  \033[38;2;66;133;244m2) 仅应用到 Chrome Stable\033[0m\n' >/dev/tty
+  printf '  \033[38;2;251;188;4m3) 应用全部频道，并禁用本地 AI 模型下载\033[0m\n' >/dev/tty
+  printf '  \033[38;2;154;160;166m0) 退出\033[0m\n' >/dev/tty
+  printf -- '-------------------\n' >/dev/tty
   choice=""; got=0
   for _ in 1 2 3; do
     printf '请输入 [1]: ' >/dev/tty
