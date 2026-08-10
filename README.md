@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/he
 ```
 
 > [!NOTE]
-> **macOS 用户**：从后台终端管理器（如 herdr）运行时若提示 `Operation not permitted`，需先为它授予“完全磁盘访问权限”，见 [macOS 隐私权限（TCC）提示](#macos-隐私权限tcc提示)。
+> **macOS**：后台终端管理器（如 herdr）运行报 `Operation not permitted` 时，给它授予“完全磁盘访问权限”即可，见 [macOS 隐私权限提示](#macos-隐私权限tcc提示)。
 
 ## 前言
 
@@ -133,19 +133,11 @@ chmod +x bring-back-gemini.sh
 
 ### macOS 隐私权限（TCC）提示
 
-macOS 将 Chrome 用户数据目录（`~/Library/Application Support/Google/Chrome` 等）视为受 TCC 保护的隐私数据。从已授权的交互终端（如 Terminal、iTerm2）运行一切正常；但从后台或无终端的“终端管理器”（如 herdr、tmux 会话、SSH/CI 环境）运行时，即使文件权限正确，读取 `Local State` 也会被系统拦截，报：
+后台终端管理器（如 herdr、SSH 环境）读取 Chrome 的 `Local State` 可能被系统拦截。解决：
 
-```text
-PermissionError: [Errno 1] Operation not permitted: '.../Local State'
-```
+系统设置 → 隐私与安全性 → 完全磁盘访问权限 → `+` → 添加终端管理器的可执行文件（如 `herdr`）→ 重启该终端管理器。
 
-解决办法（任选其一）：
-
-1. 从已授权的交互终端（Terminal、iTerm2 等）运行本脚本。
-2. 给终端管理器授予**完全磁盘访问权限**：系统设置 → 隐私与安全性 → 完全磁盘访问权限 → `+` → 选择终端管理器的可执行文件（如 `herdr`）→ 添加后重启该终端管理器。
-
-> [!TIP]
-> 脚本遇到这类权限拦截时，会直接输出带 `[提示]` 的引导（不再打印裸 traceback），并保持安全行为：不停止 Chrome、不写入任何文件。
+或直接从已授权的终端（Terminal、iTerm2）运行本脚本。
 
 ### 脚本做什么
 
