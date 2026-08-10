@@ -6,7 +6,7 @@
 
 <p align="center">将Chrome上消失的"问问 Gemini"按钮找回来，仅需一条指令</p>
 
-# 快速开始
+## 快速开始
 
 **Windows（PowerShell 5.1 / 7）**
 
