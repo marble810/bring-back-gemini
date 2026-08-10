@@ -59,7 +59,7 @@ curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/he
 > [!TIP]
 > **Q. 有没有更方便的方法？**
 >
-> **Bring Back Gemini。** 一条指令把上面那套手动改 `Local State` 的流程自动化——无需重装 Chrome，不删除或重建用户配置文件，顺手把校验、原子替换、按频道关闭重启这些容易出错的环节都包了。
+> **有。** 用 Bring Back Gemini，一条指令自动完成上面全部流程。
 
 <div align="center" style="margin: 0;">
   <img src="design/shell-screenshot.png" alt="Bring Back Gemini 运行效果" width="50%" />
