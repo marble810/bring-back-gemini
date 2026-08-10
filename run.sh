@@ -3,7 +3,7 @@
 set -u
 
 REPO=${BBG_REPO:-marble810/bring-back-gemini}
-PAYLOAD_COMMIT=${BBG_PAYLOAD_COMMIT:-ca624fd896df6140716e76bff74c676a8da88f1c}
+PAYLOAD_COMMIT=${BBG_PAYLOAD_COMMIT:-54b03a60da24cce2345779ad68644ee0000ca730}
 RAW_ROOT=${BBG_RAW_ROOT:-https://raw.githubusercontent.com/$REPO}
 
 die() { printf '错误: %s\n' "$*" >&2; exit 1; }
@@ -93,7 +93,7 @@ shorten() {
 }
 
 has_present=0
-for line in "${p_lines[@]}"; do
+for line in ${p_lines[@]+"${p_lines[@]}"}; do
   if [[ "$line" =~ ^\[([a-z]+)\]\ (计划修改|无需修改|验证失败):\ (.*)$ ]]; then
     label="${BASH_REMATCH[1]}"; status="${BASH_REMATCH[2]}"; path="${BASH_REMATCH[3]}"
     has_present=1
