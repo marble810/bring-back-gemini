@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repo = if ($env:BBG_REPO) { $env:BBG_REPO } else { 'marble810/bring-back-gemini' }
-$payloadCommit = if ($env:BBG_PAYLOAD_COMMIT) { $env:BBG_PAYLOAD_COMMIT } else { '54b03a60da24cce2345779ad68644ee0000ca730' }
+$payloadCommit = if ($env:BBG_PAYLOAD_COMMIT) { $env:BBG_PAYLOAD_COMMIT } else { '8fb24e2db0c07a265444693093442c1cfa51811b' }
 $rawRoot = if ($env:BBG_RAW_ROOT) { $env:BBG_RAW_ROOT.TrimEnd('/') } else { "https://raw.githubusercontent.com/$repo" }
 
 if ($repo -notmatch '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$') {
