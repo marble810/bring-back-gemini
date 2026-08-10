@@ -98,83 +98,106 @@ fi
 # is_glic_eligible, and uses a same-directory temporary file plus os.replace.
 run_json() {
   python3 - "$1" "$2" "$3" <<'PY'
-import copy, json, os, sys, tempfile
+import copy, errno, json, os, sys, tempfile
 path, mode, disable = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 def reject_constant(value):
     raise ValueError("不允许非标准 JSON 数值: " + value)
-with open(path, "rb") as source_file:
-    raw = source_file.read()
-    source_mode = os.fstat(source_file.fileno()).st_mode
-data = json.loads(raw.decode("utf-8"), parse_constant=reject_constant)
-if not isinstance(data, dict):
-    raise ValueError("Local State 根节点必须是 JSON 对象")
-if "browser" in data and not isinstance(data["browser"], dict):
-    raise ValueError("Local State 的 browser 必须是对象")
 
-def recurse(value):
-    if isinstance(value, dict):
-        for key in list(value):
-            if key == "is_glic_eligible":
-                value[key] = True
-            else:
-                recurse(value[key])
-    elif isinstance(value, list):
-        for item in value:
-            recurse(item)
+def permission_hint(exc):
+    if exc.errno == errno.EPERM and sys.platform == "darwin":
+        return ("\n[提示] 读取被拒绝(Operation not permitted)通常是 macOS 隐私权限(TCC)拦截: "
+                "Chrome 数据目录受系统保护, 后台或无终端进程默认无权访问。\n"
+                "请从已获授权的终端(如 Terminal/iTerm)运行本脚本, 或为启动脚本的进程授予"
+                "“完全磁盘访问权限”(系统设置 → 隐私与安全性)后重试。")
+    return "\n[提示] 请检查文件/目录权限后重试。"
 
-new = copy.deepcopy(data)
-recurse(new)
-new["variations_country"] = "us"
-# Chromium 官方为测试/开发预留的 permanent country override，优先级高于
-# variations_permanent_consistency_country（见 variations_field_trial_creator_base）。
-new["variations_permanent_overridden_country"] = "us"
-last_path = os.path.join(os.path.dirname(path), "Last Version")
-if isinstance(new.get("variations_permanent_consistency_country"), list) and len(new["variations_permanent_consistency_country"]) >= 2 and os.path.isfile(last_path):
-    with open(last_path, "r", encoding="utf-8") as f:
-        version = f.read().strip()
-    if version:
-        new["variations_permanent_consistency_country"][0] = version
-        new["variations_permanent_consistency_country"][1] = "us"
-# 始终规范化 browser.enabled_labs_experiments：启用 glic@1（chrome://flags/#glic
-# → Enabled 的持久化等价物），移除任意 glic/glic@N 旧值并保留其他 flag；
-# --disable-ai-download 时额外把两个本地 AI 模型 flag 规范化为 @2。
-browser = new.setdefault("browser", {})
-flags = browser.get("enabled_labs_experiments")
-if flags is None:
-    flags = []
-elif not isinstance(flags, list):
-    raise ValueError("browser.enabled_labs_experiments 必须是数组")
-names = ("optimization-guide-on-device-model", "prompt-api-for-gemini-nano")
-kept = []
-for x in flags:
-    if isinstance(x, str) and (x == "glic" or x.startswith("glic@")):
-        continue
-    if disable and isinstance(x, str) and any(x == n or x.startswith(n + "@") for n in names):
-        continue
-    kept.append(x)
-kept.append("glic@1")
-if disable:
-    kept.extend(n + "@2" for n in names)
-browser["enabled_labs_experiments"] = kept
-changed = new != data
-print("CHANGED=" + ("1" if changed else "0"))
-if mode == "write" and changed:
-    directory = os.path.dirname(path) or "."
-    fd, temp = tempfile.mkstemp(prefix=".local-state-", dir=directory)
+def run():
     try:
-        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(new, f, ensure_ascii=False, indent=2, allow_nan=False)
-            f.write("\n"); f.flush(); os.fsync(f.fileno())
-        os.chmod(temp, source_mode)
-        # Compare-before-replace; a tiny race remains between this check and os.replace.
-        with open(path, "rb") as current_file:
-            if current_file.read() != raw:
-                raise RuntimeError("Local State 在计划后再次变化；已中止以避免覆盖并发更新")
-        os.replace(temp, path)
-    except Exception:
-        try: os.unlink(temp)
-        except OSError: pass
-        raise
+        with open(path, "rb") as source_file:
+            raw = source_file.read()
+            source_mode = os.fstat(source_file.fileno()).st_mode
+    except PermissionError as exc:
+        raise ValueError(f"无法读取 Local State: {exc}{permission_hint(exc)}") from exc
+    except OSError as exc:
+        raise ValueError(f"无法读取 Local State: {exc}") from exc
+    data = json.loads(raw.decode("utf-8"), parse_constant=reject_constant)
+    if not isinstance(data, dict):
+        raise ValueError("Local State 根节点必须是 JSON 对象")
+    if "browser" in data and not isinstance(data["browser"], dict):
+        raise ValueError("Local State 的 browser 必须是对象")
+
+    def recurse(value):
+        if isinstance(value, dict):
+            for key in list(value):
+                if key == "is_glic_eligible":
+                    value[key] = True
+                else:
+                    recurse(value[key])
+        elif isinstance(value, list):
+            for item in value:
+                recurse(item)
+
+    new = copy.deepcopy(data)
+    recurse(new)
+    new["variations_country"] = "us"
+    # Chromium 官方为测试/开发预留的 permanent country override，优先级高于
+    # variations_permanent_consistency_country（见 variations_field_trial_creator_base）。
+    new["variations_permanent_overridden_country"] = "us"
+    last_path = os.path.join(os.path.dirname(path), "Last Version")
+    if isinstance(new.get("variations_permanent_consistency_country"), list) and len(new["variations_permanent_consistency_country"]) >= 2 and os.path.isfile(last_path):
+        with open(last_path, "r", encoding="utf-8") as f:
+            version = f.read().strip()
+        if version:
+            new["variations_permanent_consistency_country"][0] = version
+            new["variations_permanent_consistency_country"][1] = "us"
+    # 始终规范化 browser.enabled_labs_experiments：启用 glic@1（chrome://flags/#glic
+    # → Enabled 的持久化等价物），移除任意 glic/glic@N 旧值并保留其他 flag；
+    # --disable-ai-download 时额外把两个本地 AI 模型 flag 规范化为 @2。
+    browser = new.setdefault("browser", {})
+    flags = browser.get("enabled_labs_experiments")
+    if flags is None:
+        flags = []
+    elif not isinstance(flags, list):
+        raise ValueError("browser.enabled_labs_experiments 必须是数组")
+    names = ("optimization-guide-on-device-model", "prompt-api-for-gemini-nano")
+    kept = []
+    for x in flags:
+        if isinstance(x, str) and (x == "glic" or x.startswith("glic@")):
+            continue
+        if disable and isinstance(x, str) and any(x == n or x.startswith(n + "@") for n in names):
+            continue
+        kept.append(x)
+    kept.append("glic@1")
+    if disable:
+        kept.extend(n + "@2" for n in names)
+    browser["enabled_labs_experiments"] = kept
+    changed = new != data
+    print("CHANGED=" + ("1" if changed else "0"))
+    if mode == "write" and changed:
+        directory = os.path.dirname(path) or "."
+        fd, temp = tempfile.mkstemp(prefix=".local-state-", dir=directory)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(new, f, ensure_ascii=False, indent=2, allow_nan=False)
+                f.write("\n"); f.flush(); os.fsync(f.fileno())
+            os.chmod(temp, source_mode)
+            # Compare-before-replace; a tiny race remains between this check and os.replace.
+            with open(path, "rb") as current_file:
+                if current_file.read() != raw:
+                    raise RuntimeError("Local State 在计划后再次变化；已中止以避免覆盖并发更新")
+            os.replace(temp, path)
+        except Exception:
+            try: os.unlink(temp)
+            except OSError: pass
+            raise
+
+try:
+    run()
+except SystemExit:
+    raise
+except Exception as exc:
+    print(f"错误: {exc}", file=sys.stderr)
+    sys.exit(1)
 PY
 }
 

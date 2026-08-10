@@ -168,7 +168,16 @@ function Set-GlicEligibleRecursive($Value) {
 }
 
 function Convert-LocalState([string]$Path, [bool]$Disable) {
-    $sourceBytes = [IO.File]::ReadAllBytes($Path)
+    try {
+        $sourceBytes = [IO.File]::ReadAllBytes($Path)
+    } catch [System.UnauthorizedAccessException] {
+        throw ("无法读取 Local State: $($_.Exception.Message)`n" +
+            '[提示] 读取被拒绝通常是文件被占用、只读属性或进程权限不足。' +
+            '请确认 Chrome 已关闭且没有其他程序占用 Local State；' +
+            '若以服务/计划任务方式运行，请改用交互式终端。')
+    } catch [System.IO.IOException] {
+        throw "无法读取 Local State: $($_.Exception.Message)"
+    }
     $text = [Text.Encoding]::UTF8.GetString($sourceBytes)
     # ConvertFrom-Json 会把单元素数组拆成对象，因此先要求根文本以 { 开头。
     $rootProbe = $text.TrimStart()

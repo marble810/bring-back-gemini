@@ -181,6 +181,21 @@ class ScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 64, result.stdout + result.stderr)
         self.assertEqual(state.read_bytes(), original)
 
+    def test_shell_unreadable_state_prints_actionable_error(self):
+        state = self.write_state(self.fixture())
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root 不受文件权限位限制")
+        state.chmod(0)
+        try:
+            result = self.run_sh("--check")
+        finally:
+            state.chmod(0o600)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("无法读取 Local State", result.stderr)
+        self.assertIn("[提示]", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertEqual(list(self.profile.glob("*.backup-*")), [])
+
     def test_linux_policy_test_override_never_uses_etc(self):
         state = self.write_state({"browser": {"enabled_labs_experiments": []}})
         policy_dir = Path(self.temp.name) / "isolated-policy"
