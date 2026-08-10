@@ -52,6 +52,8 @@ done
 
 command -v python3 >/dev/null 2>&1 || { echo "错误: 需要 python3，未进行任何修改。" >&2; exit 1; }
 
+# bash < 4.4（macOS 自带 3.2）在 set -u 下展开空数组会报 unbound variable，
+# 因此可能为空的数组统一用 ${arr[@]+"${arr[@]}"} 惯用法展开。
 OS=$(uname -s)
 case "$OS" in
   Darwin|Linux) ;;
@@ -64,7 +66,7 @@ for ch in "${CHANNEL_ARGS[@]}"; do
   ch=$(printf '%s' "$ch" | tr '[:upper:]' '[:lower:]')
   [[ "$ch" == all ]] && { CHANNELS=(stable beta dev canary); break; }
   case "$ch" in stable|beta|dev|canary) ;; *) die_usage "无效频道: $ch" ;; esac
-  seen=0; for old in "${CHANNELS[@]}"; do [[ "$old" == "$ch" ]] && seen=1; done
+  seen=0; for old in ${CHANNELS[@]+"${CHANNELS[@]}"}; do [[ "$old" == "$ch" ]] && seen=1; done
   ((seen)) || CHANNELS+=("$ch")
 done
 
@@ -208,7 +210,7 @@ if ((CHECK)); then
 fi
 
 need_pgrep=0
-for idx in "${PLAN_CHANGED[@]}"; do [[ -n "${EXES[$idx]}" ]] && need_pgrep=1; done
+for idx in ${PLAN_CHANGED[@]+"${PLAN_CHANGED[@]}"}; do [[ -n "${EXES[$idx]}" ]] && need_pgrep=1; done
 if ((need_pgrep)) && ! command -v pgrep >/dev/null 2>&1; then
   echo "错误: 计划修改正常频道配置时需要 pgrep；未停止 Chrome，未写入配置。" >&2
   exit 1
@@ -220,7 +222,7 @@ ASKED_STOP=0
 restart_stopped() {
   local exe failed=0
   if ((NO_RESTART)); then RESTART_DONE=1; return 0; fi
-  for exe in "${STOPPED_EXES[@]}"; do
+  for exe in ${STOPPED_EXES[@]+"${STOPPED_EXES[@]}"}; do
     if [[ -x "$exe" ]]; then
       if [[ "$OS" == Darwin ]]; then
         "$exe" >/dev/null 2>&1 &
@@ -295,7 +297,7 @@ stop_selected() {
       fi
     fi
     # Record for restart only after every matched process has actually exited.
-    already=0; for old in "${STOPPED_EXES[@]}"; do [[ "$old" == "$exe" ]] && already=1; done
+    already=0; for old in ${STOPPED_EXES[@]+"${STOPPED_EXES[@]}"}; do [[ "$old" == "$exe" ]] && already=1; done
     ((already)) || STOPPED_EXES+=("$exe")
   done
 }
@@ -304,7 +306,7 @@ if ((${#PLAN_CHANGED[@]})); then
 fi
 
 status=0
-for idx in "${PLAN_CHANGED[@]}"; do
+for idx in ${PLAN_CHANGED[@]+"${PLAN_CHANGED[@]}"}; do
   state="${ROOTS[$idx]}/Local State"
   if output=$(run_json "$state" write "$DISABLE_AI_DOWNLOAD" 2>&1); then
     if grep -q '^CHANGED=0$' <<< "$output"; then
