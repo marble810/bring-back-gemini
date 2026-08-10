@@ -50,13 +50,19 @@ print_banner_art() {
 ART
 }
 
-if [[ -t 1 ]]; then print_banner_art; fi
 printf '正在下载 %s@%s ...\n' "$REPO" "$PAYLOAD_COMMIT"
 base="$RAW_ROOT/$PAYLOAD_COMMIT"
 payload="$tmp_dir/bring-back-gemini.sh"
 curl -fsSL --connect-timeout 15 --max-time 60 "$base/bring-back-gemini.sh" -o "$payload" || die "无法下载主脚本"
 chmod 700 "$payload"
 printf '已下载 %s@%s。\n' "$REPO" "$PAYLOAD_COMMIT"
+
+# 下载完成：交互终端下清除上面两行下载提示，再展示彩虹标题。
+if [[ -t 1 ]]; then
+  printf '\033[2A\033[J'
+  print_banner_art
+  printf '\n'
+fi
 
 run_payload() {
   # 交互终端下把 stdin 切到 /dev/tty：管道执行时 stdin 是 EOF，

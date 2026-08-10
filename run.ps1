@@ -58,13 +58,18 @@ function Write-Rainbow2Art {
 $tempDir = Join-Path ([IO.Path]::GetTempPath()) ('bring-back-gemini-run-' + [Guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($tempDir) | Out-Null
 try {
-    if ($useColor) { Write-Rainbow2Art $artLines }
     Write-Host "正在下载 $repo@$payloadCommit ..."
     $headers = @{ 'User-Agent' = 'bring-back-gemini-bootstrap' }
     $base = "$rawRoot/$payloadCommit"
     $payloadPath = Join-Path $tempDir 'bring-back-gemini.ps1'
     Invoke-WebRequest -Uri "$base/bring-back-gemini.ps1" -Headers $headers -UseBasicParsing -OutFile $payloadPath
     Write-Host "已下载 $repo@$payloadCommit。"
+    if ($useColor) {
+        # 下载完成：清除上面两行下载提示，再展示彩虹标题。
+        Write-Host -NoNewline "${esc}[2A${esc}[J"
+        Write-Rainbow2Art $artLines
+        Write-Host ''
+    }
 
     $hostExe = (Get-Process -Id $PID).Path
     if (-not $hostExe) { throw '无法确定当前 PowerShell 可执行文件' }
