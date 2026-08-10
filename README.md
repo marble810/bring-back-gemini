@@ -70,6 +70,12 @@ curl -fsSL https://raw.githubusercontent.com/marble810/bring-back-gemini/refs/he
 
 ## 使用
 
+运行效果：
+
+<p align="center">
+  <img src="design/shell-screenshot.png" alt="Bring Back Gemini 运行效果" />
+</p>
+
 ### 一条命令运行
 
 > 不想读文档？直接跑下面这条。默认先做现状检查（只查看，不修改任何文件），确认后才应用。
